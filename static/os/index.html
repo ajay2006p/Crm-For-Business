@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RecruitKr Business OS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            vision: { bg: '#0b1020', card: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.12)' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #0b1020 0%, #1a1040 40%, #0d1b3e 70%, #12082a 100%);
+      min-height: 100vh;
+      color: #e2e8f0;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    }
+    .glass-strong {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(129, 140, 248, 0.25);
+    }
+    .nav-item.active {
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.35), rgba(168, 85, 247, 0.15));
+      border-left: 3px solid #818cf8;
+      color: #fff;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .input-field {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 0.5rem;
+      padding: 0.55rem 0.75rem;
+      color: #f1f5f9;
+      font-size: 0.875rem;
+    }
+    .input-field:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.25); }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
+      padding: 0.55rem 1rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: opacity 0.2s;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+      padding: 0.5rem 0.9rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+    }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .data-table th, .data-table td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .data-table th { color: #94a3b8; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .data-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+    .badge-new { background: rgba(59,130,246,0.2); color: #93c5fd; }
+    .badge-success { background: rgba(34,197,94,0.2); color: #86efac; }
+    .badge-warn { background: rgba(234,179,8,0.2); color: #fde047; }
+    .badge-danger { background: rgba(239,68,68,0.2); color: #fca5a5; }
+    #loading-overlay { transition: opacity 0.2s; }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .toast {
+      animation: slideIn 0.3s ease;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .toast.success { background: rgba(34,197,94,0.9); color: white; }
+    .toast.error { background: rgba(239,68,68,0.9); color: white; }
+    .toast.info { background: rgba(59,130,246,0.9); color: white; }
+    .toast.warning { background: rgba(234,179,8,0.9); color: #1e293b; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .qr-preview-box {
+      position: relative;
+      width: 220px;
+      height: 280px;
+      background: white;
+      border-radius: 4px;
+      margin: 0 auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .qr-preview-marker {
+      position: absolute;
+      background: #6366f1;
+      border: 2px solid #4338ca;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.55rem;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  </style>
+</head>
+<body class="h-full antialiased">
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="glass rounded-2xl p-8 text-center">
+    <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-400 mb-3"></i>
+    <p class="text-slate-300 text-sm" id="loading-text">Loading…</p>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[9998] w-80 max-w-[90vw]"></div>
+
+<!-- Main App -->
+<div id="main-app" class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-64 glass-strong flex-shrink-0 flex flex-col fixed h-full z-40">
+    <div class="p-5 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+          <i class="fa-solid fa-building text-white"></i>
+        </div>
+        <div>
+          <h2 class="font-bold text-white text-sm">RecruitKr</h2>
+          <p class="text-xs text-slate-400">Business OS</p>
+        </div>
+      </div>
+    </div>
+    <nav class="flex-1 overflow-y-auto py-3 px-2 space-y-0.5" id="sidebar-nav">
+      <a href="#" class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="dashboard"><i class="fa-solid fa-gauge-high w-5"></i>Dashboard</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="leads"><i class="fa-solid fa-users w-5"></i>Leads</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="companies"><i class="fa-solid fa-building-user w-5"></i>Companies</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="area-api"><i class="fa-solid fa-map-location-dot w-5"></i>Area API</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="outreach"><i class="fa-solid fa-paper-plane w-5"></i>Outreach</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="meetings"><i class="fa-solid fa-calendar-check w-5"></i>Meetings</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="tasks"><i class="fa-solid fa-list-check w-5"></i>Tasks</a>
+      <div class="pt-3 pb-1 px-3 text-xs text-slate-500 uppercase tracking-wider">HR</div>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="employees"><i class="fa-solid fa-id-badge w-5"></i>Employees</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="attendance"><i class="fa-solid fa-clock w-5"></i>Attendance</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="leave"><i class="fa-solid fa-umbrella-beach w-5"></i>Leave</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="payroll"><i class="fa-solid fa-money-bill-wave w-5"></i>Payroll</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="holidays"><i class="fa-solid fa-gift w-5"></i>Holidays</a>
+      <div class="pt-3 pb-1 px-3 text-xs text-slate-500 uppercase tracking-wider">Finance & Docs</div>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="invoices"><i class="fa-solid fa-file-invoice-dollar w-5"></i>Invoices</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="documents"><i class="fa-solid fa-folder-open w-5"></i>Documents</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="qr-generator"><i class="fa-solid fa-qrcode w-5"></i>QR Generator</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="analytics"><i class="fa-solid fa-chart-pie w-5"></i>Analytics</a>
+      <div class="pt-3 pb-1 px-3 text-xs text-slate-500 uppercase tracking-wider">Admin</div>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="users"><i class="fa-solid fa-users-gear w-5"></i>Users</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="settings"><i class="fa-solid fa-gear w-5"></i>Settings</a>
+    </nav>
+    <div class="p-4 border-t border-white/10">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold" id="user-avatar">A</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-white truncate" id="user-name">Admin</p>
+          <p class="text-xs text-slate-400 truncate" id="user-email">admin@recruitkr.com</p>
+        </div>
+      </div>
+      <button id="logout-btn" class="btn-secondary w-full text-sm"><i class="fa-solid fa-right-from-bracket mr-2"></i>Logout</button>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="flex-1 ml-64 p-6 overflow-y-auto min-h-screen">
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-white" id="page-title">Dashboard</h1>
+        <p class="text-sm text-slate-400" id="page-subtitle">Overview & activity</p>
+      </div>
+      <div class="text-sm text-slate-400" id="current-date"></div>
+    </header>
+
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="tab-panel active space-y-6">
+      <!-- DB connection status bar (hidden until error) -->
+      <div id="dash-db-error" class="hidden glass rounded-xl p-4 border border-red-500/30 flex items-center gap-3 text-sm">
+        <i class="fa-solid fa-circle-exclamation text-red-400 text-lg flex-shrink-0"></i>
+        <div>
+          <p class="text-red-300 font-medium">Database connection issue</p>
+          <p class="text-slate-400 text-xs">Stats may be incomplete. Ensure MongoDB is running.</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="dash-stats">
+        <div class="glass rounded-xl p-5">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Total Leads</p>
+          <p class="text-3xl font-bold text-white mt-1" id="stat-leads"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Contacted</p>
+          <p class="text-3xl font-bold text-emerald-400 mt-1" id="stat-contacted"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Meetings</p>
+          <p class="text-3xl font-bold text-blue-400 mt-1" id="stat-meetings"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Employees</p>
+          <p class="text-3xl font-bold text-purple-400 mt-1" id="stat-employees"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Payroll Total</p>
+          <p class="text-3xl font-bold text-amber-400 mt-1" id="stat-payroll"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Revenue</p>
+          <p class="text-3xl font-bold text-cyan-400 mt-1" id="stat-revenue"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-chart-bar mr-2 text-indigo-400"></i>Lead Pipeline</h3>
+          <canvas id="dash-chart-leads" height="200"></canvas>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-clock-rotate-left mr-2 text-indigo-400"></i>Recent Activity</h3>
+          <div id="dash-activities" class="space-y-2 max-h-64 overflow-y-auto text-sm text-slate-300"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Leads -->
+    <section id="tab-leads" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Scrape New Leads</h3>
+        <form id="scrape-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label for="scrape-business" class="block text-xs text-slate-400 mb-1">Business Type</label>
+            <input type="text" id="scrape-business" class="input-field" required minlength="2" placeholder="Restaurants" />
+          </div>
+          <div>
+            <label for="scrape-location" class="block text-xs text-slate-400 mb-1">Location</label>
+            <input type="text" id="scrape-location" class="input-field" required minlength="2" placeholder="Jaipur" />
+          </div>
+          <div>
+            <label for="scrape-target" class="block text-xs text-slate-400 mb-1">Target Count</label>
+            <input type="number" id="scrape-target" class="input-field" min="1" max="5000" value="100" required />
+          </div>
+          <div class="flex items-end gap-2">
+            <select id="scrape-scope" class="input-field">
+              <option value="city">City Scope</option>
+              <option value="country">Country Scope</option>
+            </select>
+            <button type="submit" class="btn-primary whitespace-nowrap"><i class="fa-solid fa-spider mr-1"></i>Scrape</button>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-slate-300 col-span-full">
+            <input type="checkbox" id="scrape-no-website" class="rounded" /> No website only
+          </label>
+        </form>
+        <div id="scrape-status" class="mt-4 hidden">
+          <div class="flex items-center gap-3 text-sm">
+            <span class="badge badge-warn" id="scrape-job-status">Running</span>
+            <span id="scrape-progress-text">0 / 0 found</span>
+          </div>
+          <div class="mt-2 h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div id="scrape-progress-bar" class="h-full bg-indigo-500 transition-all" style="width:0%"></div>
+          </div>
+          <button id="scrape-save-btn" class="btn-primary mt-3 hidden"><i class="fa-solid fa-database mr-1"></i>Save to Database</button>
+        </div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex flex-wrap gap-3 mb-4">
+          <input type="text" id="lead-filter-q" class="input-field max-w-xs" placeholder="Search leads…" />
+          <select id="lead-filter-status" class="input-field max-w-[160px]">
+            <option value="">All Status</option>
+            <option>New</option><option>Contacted</option><option>Interested</option>
+            <option>Meeting Scheduled</option><option>Client</option><option>Rejected</option>
+          </select>
+          <input type="text" id="lead-filter-city" class="input-field max-w-[140px]" placeholder="City" />
+          <button id="lead-filter-btn" class="btn-primary"><i class="fa-solid fa-filter mr-1"></i>Filter</button>
+          <button id="lead-add-btn" class="btn-secondary"><i class="fa-solid fa-plus mr-1"></i>Add Lead</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table"><thead><tr>
+            <th>Name</th><th>Phone</th><th>City</th><th>Area</th><th>Status</th><th>Rating</th><th>Actions</th>
+          </tr></thead><tbody id="leads-tbody"></tbody></table>
+        </div>
+        <div class="flex justify-between items-center mt-4 text-sm text-slate-400">
+          <span id="leads-count">0 leads</span>
+          <div class="flex gap-2">
+            <button id="leads-prev" class="btn-secondary text-xs">Prev</button>
+            <button id="leads-next" class="btn-secondary text-xs">Next</button>
+          </div>
+        </div>
+      </div>
+      <!-- Add Lead Modal -->
+      <div id="lead-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div class="glass rounded-xl p-6 w-full max-w-lg">
+          <h3 class="text-lg font-bold text-white mb-4">Add Lead</h3>
+          <form id="lead-form" class="space-y-3">
+            <div><label class="block text-xs text-slate-400 mb-1">Name</label><input name="name" class="input-field" required minlength="1" /></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs text-slate-400 mb-1">Phone</label><input name="phone_number" class="input-field" /></div>
+              <div><label class="block text-xs text-slate-400 mb-1">City</label><input name="city" class="input-field" /></div>
+            </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Address</label><input name="address" class="input-field" /></div>
+            <div class="flex gap-2 justify-end mt-4">
+              <button type="button" id="lead-modal-close" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Area API -->
+    <section id="tab-area-api" class="tab-panel space-y-4">
+      <!-- API Status Bar -->
+      <div class="glass rounded-xl p-4 flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+            <i class="fa-solid fa-satellite-dish text-indigo-400"></i>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-white">OpenStreetMap Nominatim API</p>
+            <p class="text-xs text-slate-500">Real-time global location &amp; area data</p>
+          </div>
+        </div>
+        <div class="ml-auto flex items-center gap-3">
+          <span id="area-api-status" class="badge badge-warn"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Checking…</span>
+          <button id="area-api-check-btn" class="btn-secondary text-xs"><i class="fa-solid fa-rotate-right mr-1"></i>Re-check</button>
+        </div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-magnifying-glass-location mr-2"></i>City Search</h3>
+        <div class="flex gap-3 mb-4">
+          <input type="text" id="city-search-q" class="input-field max-w-md" placeholder="Search city (min 2 chars)…" minlength="2" required />
+          <button id="city-search-btn" class="btn-primary"><i class="fa-solid fa-search mr-1"></i>Search</button>
+        </div>
+        <div id="city-search-loading" class="hidden text-sm text-indigo-300 mb-2"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Searching locations…</div>
+        <div id="city-search-source" class="text-xs text-slate-500 mb-2 hidden"></div>
+        <div id="city-search-results" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-map mr-2"></i>Areas by City</h3>
+        <form id="areas-form" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div><label for="areas-city" class="block text-xs text-slate-400 mb-1">City</label><input type="text" id="areas-city" class="input-field" required minlength="2" placeholder="Jaipur" /></div>
+          <div><label for="areas-state" class="block text-xs text-slate-400 mb-1">State (optional)</label><input type="text" id="areas-state" class="input-field" placeholder="Rajasthan" /></div>
+          <div><label for="areas-country" class="block text-xs text-slate-400 mb-1">Country (optional)</label><input type="text" id="areas-country" class="input-field" placeholder="India" /></div>
+          <div class="md:col-span-3 flex items-center gap-3">
+            <button type="submit" class="btn-primary"><i class="fa-solid fa-list mr-1"></i>Load Areas</button>
+            <span id="areas-api-badge" class="badge hidden"></span>
+          </div>
+        </form>
+        <div id="areas-loading" class="hidden text-sm text-indigo-300 mb-2"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Fetching areas from Nominatim…</div>
+        <div id="areas-meta" class="text-sm text-slate-400 mb-3"></div>
+        <div id="areas-list" class="flex flex-wrap gap-2"></div>
+      </div>
+    </section>
+
+    <!-- Outreach -->
+    <section id="tab-outreach" class="tab-panel space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Message Templates</h3>
+          <form id="template-form" class="space-y-3 mb-4">
+            <input type="hidden" id="template-edit-id" />
+            <div><label class="block text-xs text-slate-400 mb-1">Name</label><input id="tpl-name" class="input-field" required minlength="2" placeholder="Intro WhatsApp" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Channel</label>
+              <select id="tpl-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="email">Email</option></select>
+            </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Body</label><textarea id="tpl-body" class="input-field h-24" required minlength="5" placeholder="Hi {name}, …"></textarea></div>
+            <div class="flex gap-2"><button type="submit" class="btn-primary">Save Template</button><button type="button" id="tpl-reset" class="btn-secondary">Reset</button></div>
+          </form>
+          <div id="templates-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Create Campaign</h3>
+          <form id="campaign-form" class="space-y-3">
+            <div><label class="block text-xs text-slate-400 mb-1">Template</label><select id="campaign-template" class="input-field" required></select></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Lead IDs (comma-separated)</label><input id="campaign-leads" class="input-field" required placeholder="id1, id2" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Channel</label><select id="campaign-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select></div>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="campaign-mark" checked /> Mark as contacted</label>
+            <button type="submit" class="btn-primary"><i class="fa-solid fa-rocket mr-1"></i>Launch Campaign</button>
+          </form>
+          <div id="campaign-result" class="mt-4 hidden"></div>
+        </div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Campaign History</h3>
+        <div id="campaigns-list" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- Meetings -->
+    <section id="tab-meetings" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Schedule Meeting</h3>
+        <form id="meeting-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Title</label><input name="title" class="input-field" required minlength="2" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Lead ID (optional)</label><input name="lead_id" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Scheduled At</label><input name="scheduled_at" type="datetime-local" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Status</label><select name="status" class="input-field"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select></div>
+          <div class="md:col-span-2"><label class="block text-xs text-slate-400 mb-1">Notes</label><textarea name="notes" class="input-field h-20"></textarea></div>
+          <div><button type="submit" class="btn-primary">Schedule</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">All Meetings</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Title</th><th>Scheduled</th><th>Status</th><th>Notes</th></tr></thead><tbody id="meetings-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Tasks -->
+    <section id="tab-tasks" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Create Task</h3>
+        <form id="task-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Title</label><input name="title" class="input-field" required minlength="2" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Priority</label><select name="priority" class="input-field"><option>Low</option><option selected>Medium</option><option>High</option><option>Urgent</option></select></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Due Date</label><input name="due_date" type="date" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Assigned To</label><input name="assigned_to" class="input-field" placeholder="Employee ID" /></div>
+          <div class="md:col-span-2"><label class="block text-xs text-slate-400 mb-1">Description</label><textarea name="description" class="input-field h-20"></textarea></div>
+          <div><button type="submit" class="btn-primary">Create Task</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Task List</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Title</th><th>Priority</th><th>Due</th><th>Status</th><th>Action</th></tr></thead><tbody id="tasks-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Employees -->
+    <section id="tab-employees" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Add Employee</h3>
+        <form id="employee-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Name</label><input name="name" class="input-field" required minlength="2" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Email</label><input name="email" type="email" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Phone</label><input name="phone" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Department</label><input name="department" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Designation</label><input name="designation" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">CTC (Annual)</label><input name="ctc" type="number" min="0" class="input-field" value="0" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Joining Date</label><input name="joining_date" type="date" class="input-field" /></div>
+          <div class="flex items-end"><button type="submit" class="btn-primary">Add Employee</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Employee Directory</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Designation</th><th>CTC</th><th>ID</th></tr></thead><tbody id="employees-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Attendance -->
+    <section id="tab-attendance" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Upload Attendance</h3>
+        <form id="attendance-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Month (YYYY-MM)</label><input type="text" id="attendance-month" class="input-field" required pattern="\d{4}-\d{2}" placeholder="2026-06" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">File (Excel/CSV)</label><input type="file" id="attendance-file" class="input-field" required accept=".xlsx,.xls,.csv" /></div>
+          <div class="flex items-end"><button type="submit" class="btn-primary"><i class="fa-solid fa-upload mr-1"></i>Upload</button></div>
+        </form>
+        <div id="attendance-progress-wrap" class="hidden mt-4">
+          <div class="flex justify-between text-xs text-slate-400 mb-1"><span>Uploading…</span><span id="attendance-progress-pct">0%</span></div>
+          <div class="h-2 bg-slate-800 rounded-full overflow-hidden"><div id="attendance-progress-bar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex gap-3 mb-4">
+          <input type="text" id="attendance-filter-month" class="input-field max-w-[160px]" placeholder="YYYY-MM filter" />
+          <button id="attendance-load-btn" class="btn-primary">Load Records</button>
+        </div>
+        <div id="attendance-records" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- Leave -->
+    <section id="tab-leave" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Apply for Leave</h3>
+        <form id="leave-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Employee ID</label><input name="employee_id" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Leave Type</label><select name="leave_type" class="input-field"><option>Casual</option><option>Sick</option><option>Earned</option></select></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Start Date</label><input name="start_date" type="date" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">End Date</label><input name="end_date" type="date" class="input-field" required /></div>
+          <div class="md:col-span-2"><label class="block text-xs text-slate-400 mb-1">Reason</label><textarea name="reason" class="input-field h-20"></textarea></div>
+          <div><button type="submit" class="btn-primary">Submit Request</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Leave Requests</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Status</th><th>HR Action</th></tr></thead><tbody id="leave-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Payroll -->
+    <section id="tab-payroll" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Run Payroll</h3>
+        <form id="payroll-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Employee ID</label><input name="employee_id" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Month (YYYY-MM)</label><input name="month" class="input-field" required pattern="\d{4}-\d{2}" placeholder="2026-06" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Absent Days</label><input name="absent_days" type="number" min="0" class="input-field" value="0" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Leave Days</label><input name="leave_days" type="number" min="0" class="input-field" value="0" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Bonus</label><input name="bonus" type="number" min="0" class="input-field" value="0" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Other Deductions</label><input name="other_deductions" type="number" min="0" class="input-field" value="0" /></div>
+          <div class="md:col-span-3"><button type="submit" class="btn-primary"><i class="fa-solid fa-calculator mr-1"></i>Calculate & Save</button></div>
+        </form>
+        <div id="payroll-result" class="mt-4 hidden glass rounded-lg p-4 text-sm"></div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex gap-3 mb-4">
+          <input type="text" id="payroll-filter-month" class="input-field max-w-[160px]" placeholder="YYYY-MM" />
+          <button id="payroll-load-btn" class="btn-primary">Load Payroll</button>
+        </div>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Employee</th><th>Month</th><th>Net Salary</th><th>Absent</th><th>Bonus</th></tr></thead><tbody id="payroll-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Holidays -->
+    <section id="tab-holidays" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Add Holiday</h3>
+        <form id="holiday-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Title</label><input name="title" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Date</label><input name="date" type="date" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Description</label><input name="description" class="input-field" /></div>
+          <div><button type="submit" class="btn-primary">Add Holiday</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Holiday Calendar</h3>
+        <div id="holidays-list" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- Invoices -->
+    <section id="tab-invoices" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Create Invoice</h3>
+        <form id="invoice-form" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label class="block text-xs text-slate-400 mb-1">Client Name</label><input name="client_name" class="input-field" required /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Client Email</label><input name="client_email" type="email" class="input-field" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">GST %</label><input name="gst_percent" type="number" min="0" max="28" class="input-field" value="18" required /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Notes</label><input name="notes" class="input-field" /></div>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-2">Line Items</label>
+            <div id="invoice-items" class="space-y-2">
+              <div class="invoice-item grid grid-cols-4 gap-2">
+                <input name="description" class="input-field" placeholder="Description" required />
+                <input name="qty" type="number" min="1" class="input-field" value="1" required />
+                <input name="price" type="number" min="0" step="0.01" class="input-field" placeholder="Price" required />
+                <button type="button" class="btn-secondary remove-item text-xs">Remove</button>
+              </div>
+            </div>
+            <button type="button" id="invoice-add-item" class="btn-secondary mt-2 text-xs"><i class="fa-solid fa-plus mr-1"></i>Add Item</button>
+          </div>
+          <button type="submit" class="btn-primary">Create Invoice</button>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Invoices</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Invoice #</th><th>Client</th><th>Total</th><th>GST</th><th>PDF</th></tr></thead><tbody id="invoices-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Documents -->
+    <section id="tab-documents" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Upload Document</h3>
+        <form id="document-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Title</label><input name="title" class="input-field" required minlength="1" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Category</label><input name="category" class="input-field" value="General" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Tags (comma-separated)</label><input name="tags" class="input-field" placeholder="contract, hr" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">File</label><input type="file" name="file" class="input-field" required /></div>
+          <div><button type="submit" class="btn-primary"><i class="fa-solid fa-upload mr-1"></i>Upload</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex gap-3 mb-4">
+          <input type="text" id="doc-search" class="input-field max-w-xs" placeholder="Search documents…" />
+          <button id="doc-search-btn" class="btn-primary">Search</button>
+        </div>
+        <div id="documents-list" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- QR Generator -->
+    <section id="tab-qr-generator" class="tab-panel space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Insert QR into PDF</h3>
+          <form id="qr-form" class="space-y-4">
+            <div><label class="block text-xs text-slate-400 mb-1">PDF File</label><input type="file" id="qr-file" class="input-field" required accept=".pdf" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">QR Data (URL)</label><input type="url" id="qr-data" class="input-field" required value="https://recruitkr.com" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Position</label>
+              <select id="qr-position" class="input-field">
+                <option value="top-left">Top Left</option><option value="top-right">Top Right</option>
+                <option value="bottom-left">Bottom Left</option><option value="bottom-right" selected>Bottom Right</option>
+                <option value="center">Center</option>
+              </select>
+            </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Size (40–300 px)</label><input type="number" id="qr-size" class="input-field" min="40" max="300" value="100" required /></div>
+            <button type="submit" class="btn-primary"><i class="fa-solid fa-qrcode mr-1"></i>Generate</button>
+          </form>
+          <div id="qr-result" class="mt-4 hidden"></div>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4 text-center">Position Preview</h3>
+          <div class="qr-preview-box" id="qr-preview-box">
+            <div class="qr-preview-marker" id="qr-preview-marker"><i class="fa-solid fa-qrcode"></i></div>
+          </div>
+          <p class="text-xs text-slate-400 text-center mt-3">Preview shows approximate QR placement</p>
+        </div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">QR History</h3>
+        <div id="qr-history" class="space-y-2"></div>
+      </div>
+    </section>
+
+    <!-- Companies -->
+    <section id="tab-companies" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Add Company</h3>
+        <form id="company-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Name</label><input name="name" class="input-field" required minlength="1" placeholder="Acme Corp" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Industry</label><input name="industry" class="input-field" placeholder="Technology" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Contact Person</label><input name="contact_person" class="input-field" placeholder="John Doe" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Phone</label><input name="phone" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Email</label><input name="email" type="email" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Website</label><input name="website" class="input-field" placeholder="https://" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">City</label><input name="city" class="input-field" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Address</label><input name="address" class="input-field" /></div>
+          <div class="flex items-end"><button type="submit" class="btn-primary"><i class="fa-solid fa-plus mr-1"></i>Add Company</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex gap-3 mb-4">
+          <input type="text" id="company-search-q" class="input-field max-w-xs" placeholder="Search companies…" />
+          <button id="company-search-btn" class="btn-primary"><i class="fa-solid fa-search mr-1"></i>Search</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="data-table"><thead><tr><th>Name</th><th>Industry</th><th>Contact</th><th>Phone</th><th>City</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="companies-tbody"></tbody></table>
+        </div>
+        <p class="text-xs text-slate-500 mt-2" id="companies-count"></p>
+      </div>
+    </section>
+
+    <!-- Analytics -->
+    <section id="tab-analytics" class="tab-panel space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Leads by Status</h3>
+          <canvas id="chart-leads-status" height="220"></canvas>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Meetings by Status</h3>
+          <canvas id="chart-meetings-status" height="220"></canvas>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Payroll by Month</h3>
+          <canvas id="chart-payroll" height="220"></canvas>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">Revenue by Month</h3>
+          <canvas id="chart-revenue" height="220"></canvas>
+        </div>
+      </div>
+    </section>
+    <!-- Users (Admin) -->
+    <section id="tab-users" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Create User</h3>
+        <form id="user-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Name</label><input name="name" class="input-field" required minlength="2" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Email</label><input name="email" type="email" class="input-field" required /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Password</label><input name="password" type="password" class="input-field" required minlength="6" placeholder="Min 6 chars" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Role</label>
+            <select name="role" class="input-field">
+              <option value="Employee" selected>Employee</option>
+              <option value="HR">HR</option>
+              <option value="Recruiter">Recruiter</option>
+              <option value="Sales">Sales</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          <div><label class="block text-xs text-slate-400 mb-1">Department</label><input name="department" class="input-field" placeholder="Engineering" /></div>
+          <div class="flex items-end"><button type="submit" class="btn-primary"><i class="fa-solid fa-user-plus mr-1"></i>Create User</button></div>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">All Users</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Action</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="tab-settings" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">App Settings</h3>
+        <form id="settings-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1">Your Name</label><input name="your_name" class="input-field" placeholder="RecruitKr Admin" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Company Name</label><input name="company" class="input-field" placeholder="RecruitKr" /></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Default Country Code</label><input name="default_country_code" class="input-field" placeholder="+91" /></div>
+          <div class="md:col-span-2 flex gap-2 mt-2">
+            <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Settings</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="/static/os/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Google Maps Scraper</title>
+<style>
+  :root {
+    --bg:      #0f0f1a;
+    --surface: #1a1a2e;
+    --card:    #22223a;
+    --border:  #2e2e50;
+    --accent:  #7c6af7;
+    --accent2: #a78bfa;
+    --green:   #34d399;
+    --red:     #f87171;
+    --yellow:  #fbbf24;
+    --text:    #e2e8f0;
+    --muted:   #7c8db5;
+    --input:   #2a2a45;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(124,106,247,.35);
+  }
+  header .logo { font-size: 26px; }
+  header h1 { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+  header span { font-size: 12px; color: #c4b5fd; margin-top: 2px; }
+
+  /* ── Layout ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 0;
+    padding: 24px;
+    gap: 20px;
+    max-width: 1300px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 18px;
+  }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 16px; }
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+  }
+  input, select {
+    width: 100%;
+    background: var(--input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+  select option { background: var(--card); }
+
+  /* ── Buttons ── */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-start  { background: var(--accent); color: #fff; flex: 1; justify-content: center; }
+  .btn-stop   { background: var(--red);    color: #fff; }
+  .btn-dl     { background: var(--green);  color: #0f1c15; width: 100%; justify-content: center; margin-top: 10px; }
+
+  /* ── Stats ── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-box .s-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .stat-box .s-value { font-size: 22px; font-weight: 700; color: var(--accent2); }
+  .stat-box.full { grid-column: span 2; }
+  .stat-box.full .s-value { font-size: 14px; color: var(--text); }
+
+  /* ── Progress ── */
+  .progress-wrap {
+    background: var(--input);
+    border-radius: 99px;
+    height: 8px;
+    margin-top: 16px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 99px;
+    width: 0%;
+    transition: width .5s ease;
+  }
+  .progress-bar.pulse {
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: .55; }
+  }
+
+  /* ── Log panel ── */
+  .log-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .log-header .card-title { margin-bottom: 0; }
+  .badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+  }
+  .badge-idle    { background: #2e2e50; color: var(--muted); }
+  .badge-running { background: #2d1f6e; color: var(--accent2); }
+  .badge-done    { background: #0d2e1e; color: var(--green); }
+  .badge-err     { background: #2e1010; color: var(--red); }
+
+  #log-box {
+    flex: 1;
+    background: #0c0c18;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12.5px;
+    overflow-y: auto;
+    min-height: 460px;
+    max-height: 60vh;
+    line-height: 1.65;
+  }
+  .log-line          { color: #9ba8c8; }
+  .log-line.search   { color: #c4b5fd; font-weight: 500; }
+  .log-line.ok       { color: var(--green); }
+  .log-line.err      { color: var(--red); }
+  .log-line.hdr      { color: var(--accent2); letter-spacing: .3px; }
+  .log-line.done     { color: var(--green); font-weight: 700; font-size: 13px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; }
+    #log-box { min-height: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🗺️</span>
+  <div>
+    <h1>Google Maps Scraper</h1>
+    <span>Auto-expands across colonies to hit your target</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Left panel: Form ── -->
+  <div class="card">
+    <div class="card-title">Search Settings</div>
+
+    <div class="form-group">
+      <label>Search Query</label>
+      <input id="query" type="text" value="gym" placeholder="gym, restaurant, salon…" />
+    </div>
+
+    <div class="form-group">
+      <label>City</label>
+      <input id="city" type="text" value="Jaipur" list="city-list" placeholder="Jaipur, Delhi, Mumbai…" />
+      <datalist id="city-list"></datalist>
+    </div>
+
+    <div class="form-group">
+      <label>Target Count</label>
+      <input id="target" type="number" value="500" min="1" max="9999" />
+    </div>
+
+    <div class="form-group">
+      <label>Output File <span style="color:var(--muted);font-weight:400;">(optional — leave blank for auto)</span></label>
+      <input id="output" type="text" placeholder="results.csv" />
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-start" class="btn-start" onclick="startScraping()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Start Scraping
+      </button>
+      <button id="btn-stop" class="btn-stop" onclick="stopScraping()" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+        Stop
+      </button>
+    </div>
+
+    <button id="btn-dl" class="btn-dl" onclick="downloadCSV()" disabled>
+      ⬇ &nbsp;Download CSV
+    </button>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-box">
+        <div class="s-label">Found</div>
+        <div class="s-value" id="stat-found">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="s-label">Target</div>
+        <div class="s-value" id="stat-target">—</div>
+      </div>
+      <div class="stat-box full">
+        <div class="s-label">Status</div>
+        <div class="s-value" id="stat-status">Ready</div>
+      </div>
+    </div>
+
+    <div class="progress-wrap">
+      <div id="progress-bar" class="progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- ── Right panel: Log ── -->
+  <div class="card log-panel">
+    <div class="log-header">
+      <div class="card-title">Live Log</div>
+      <span id="badge" class="badge badge-idle">Idle</span>
+    </div>
+    <div id="log-box"></div>
+  </div>
+
+</main>
+
+<script>
+  // ── Load cities into datalist ─────────────────────────────────────────────
+  fetch('/cities').then(r => r.json()).then(cities => {
+    const dl = document.getElementById('city-list');
+    cities.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.charAt(0).toUpperCase() + c.slice(1);
+      dl.appendChild(opt);
+    });
+  });
+
+  let evtSource = null;
+  let currentTarget = 500;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function log(text, cls = '') {
+    const box = document.getElementById('log-box');
+    const line = document.createElement('div');
+    line.className = 'log-line ' + cls;
+    line.textContent = text;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function clearLog() {
+    document.getElementById('log-box').innerHTML = '';
+  }
+
+  function setBadge(state) {
+    const b = document.getElementById('badge');
+    b.className = 'badge badge-' + state;
+    const labels = { idle: 'Idle', running: 'Running…', done: 'Done', err: 'Error' };
+    b.textContent = labels[state] || state;
+  }
+
+  function setProgress(found, total) {
+    const bar = document.getElementById('progress-bar');
+    const pct = total > 0 ? Math.min(100, (found / total) * 100) : 0;
+    bar.style.width = pct + '%';
+    document.getElementById('stat-found').textContent = found;
+    document.getElementById('stat-target').textContent = total;
+  }
+
+  function classifyLine(text) {
+    if (text.startsWith('[') && text.includes('Searching'))        return 'search';
+    if (text.includes('→ +') || text.includes('Saved') || text.includes('Done')) return 'ok';
+    if (text.includes('ERROR') || text.includes('Error'))          return 'err';
+    if (text.startsWith('===') || text.startsWith('  Query') ||
+        text.startsWith('  City') || text.startsWith('  Target'))  return 'hdr';
+    return '';
+  }
+
+  // ── Start ─────────────────────────────────────────────────────────────────
+  async function startScraping() {
+    const query  = document.getElementById('query').value.trim();
+    const city   = document.getElementById('city').value.trim();
+    const target = parseInt(document.getElementById('target').value);
+    const output = document.getElementById('output').value.trim();
+
+    if (!query || !city) { alert('Fill in Query and City.'); return; }
+    if (!target || target < 1) { alert('Enter a valid target count.'); return; }
+
+    currentTarget = target;
+    clearLog();
+    setProgress(0, target);
+    document.getElementById('stat-status').textContent = `Searching "${query}" in ${city}…`;
+    setBadge('running');
+
+    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-stop').disabled  = false;
+    document.getElementById('btn-dl').disabled    = true;
+    document.getElementById('progress-bar').classList.add('pulse');
+
+    const res = await fetch('/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, city, target, output })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      log('Server: ' + data.msg, 'err');
+      onFinish(false);
+      return;
+    }
+
+    // Connect SSE
+    if (evtSource) evtSource.close();
+    evtSource = new EventSource('/stream');
+
+    evtSource.onmessage = function(e) {
+      const text = e.data.trim();
+      if (!text) return;
+
+      if (text === '__DONE__') {
+        evtSource.close();
+        onFinish(true);
+        return;
+      }
+
+      const cls = classifyLine(text);
+      log(text, cls);
+
+      // Parse "Total: X/Y"
+      const m = text.match(/Total:\s*(\d+)\/(\d+)/);
+      if (m) setProgress(parseInt(m[1]), parseInt(m[2]));
+
+      // Parse final saved count
+      const s = text.match(/Saved\s+(\d+)\s+results/);
+      if (s) setProgress(parseInt(s[1]), currentTarget);
+    };
+
+    evtSource.onerror = function() {
+      evtSource.close();
+      onFinish(false);
+    };
+  }
+
+  // ── Stop ──────────────────────────────────────────────────────────────────
+  async function stopScraping() {
+    await fetch('/stop', { method: 'POST' });
+    document.getElementById('btn-stop').disabled = true;
+    document.getElementById('stat-status').textContent = 'Stopping…';
+  }
+
+  // ── Finish ────────────────────────────────────────────────────────────────
+  function onFinish(success) {
+    document.getElementById('progress-bar').classList.remove('pulse');
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('btn-stop').disabled  = true;
+    document.getElementById('btn-dl').disabled    = false;
+    setBadge(success ? 'done' : 'err');
+
+    fetch('/status').then(r => r.json()).then(s => {
+      document.getElementById('stat-status').textContent =
+        success ? `Done — ${s.count} results saved` : 'Finished (stopped or error)';
+      if (s.count) setProgress(s.count, currentTarget);
+      if (success) log(`\n  ✔  ${s.count} results → ${s.output}`, 'done');
+    });
+  }
+
+  // ── Download ──────────────────────────────────────────────────────────────
+  function downloadCSV() {
+    window.location.href = '/download';
+  }
+</script>
+</body>
+</html>

@@ -1,2 +1,29 @@
 venv
 dev
+
+# Environment secrets
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+.venv/
+
+# Uploads & data output
+uploads/
+output/
+*.xlsx
+*.json
+
+# Claude internal
+.claude/
+
+# Logs
+*.log
+mongod.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

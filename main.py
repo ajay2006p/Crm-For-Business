@@ -99,8 +99,8 @@ def main():
         if os.path.exists(input_file_path):
         # Open the file in read mode
             with open(input_file_path, 'r') as file:
-            # Read all lines into a list
-                search_list = file.readlines()
+            # Read all lines into a list and strip newlines
+                search_list = [line.strip() for line in file if line.strip()]
                 
         if len(search_list) == 0:
             print('Error occured: You must either pass the -s search argument, or add searches to input.txt')
@@ -112,19 +112,34 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         page = browser.new_page()
+        
+        
 
         page.goto("https://www.google.com/maps", timeout=60000)
-        # wait is added for dev phase. can remove it in production
-        page.wait_for_timeout(5000)
+        # wait removed for faster execution
+        page.wait_for_timeout(500)
+        print("Title:", page.title())
+        print("Url:" , page.url)
+        # page.screenshot(path="debug.png")
         
+           
+           
+           
+           
+           
+           
+           
         for search_for_index, search_for in enumerate(search_list):
             print(f"-----\n{search_for_index} - {search_for}".strip())
-
-            page.locator('//input[@id="searchboxinput"]').fill(search_for)
-            page.wait_for_timeout(3000)
+            
+            print("Searchbox count:",
+            page.locator('//input[@name="q"]').count())
+            page.locator('//input[@name="q"]').fill(search_for)
+            # page.screenshot(path="maps_debug.png")
+            page.wait_for_timeout(100)
 
             page.keyboard.press("Enter")
-            page.wait_for_timeout(5000)
+            page.wait_for_timeout(1000)
 
             # scrolling
             page.hover('//a[contains(@href, "https://www.google.com/maps/place")]')
@@ -134,7 +149,7 @@ def main():
             previously_counted = 0
             while True:
                 page.mouse.wheel(0, 10000)
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(200)
 
                 if (
                     page.locator(
@@ -179,9 +194,9 @@ def main():
             for listing in listings:
                 try:
                     listing.click()
-                    page.wait_for_timeout(5000)
+                    page.wait_for_timeout(300)
 
-                    name_attibute = 'aria-label'
+                    name_attribute = 'aria-label'
                     address_xpath = '//button[@data-item-id="address"]//div[contains(@class, "fontBodyMedium")]'
                     website_xpath = '//a[@data-item-id="authority"]//div[contains(@class, "fontBodyMedium")]'
                     phone_number_xpath = '//button[contains(@data-item-id, "phone:tel:")]//div[contains(@class, "fontBodyMedium")]'
@@ -191,9 +206,9 @@ def main():
                     
                     business = Business()
                    
-                    if len(listing.get_attribute(name_attibute)) >= 1:
+                    if listing.get_attribute(name_attribute):
         
-                        business.name = listing.get_attribute(name_attibute)
+                        business.name = listing.get_attribute(name_attribute)
                     else:
                         business.name = ""
                     if page.locator(address_xpath).count() > 0:
@@ -220,7 +235,7 @@ def main():
                         
                     if page.locator(reviews_average_xpath).count() > 0:
                         business.reviews_average = float(
-                            page.locator(reviews_average_xpath).get_attribute(name_attibute)
+                            page.locator(reviews_average_xpath).get_attribute(name_attribute)
                             .split()[0]
                             .replace(',','.')
                             .strip())
