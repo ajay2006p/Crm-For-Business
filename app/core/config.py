@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     default_admin_email: str = os.getenv("ADMIN_EMAIL", "admin@recruitkr.com")
     default_admin_password: str = os.getenv("ADMIN_PASSWORD", "Admin@123")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    # Toggle to disable authentication for development / demos
+    auth_required: bool = os.getenv("AUTH_REQUIRED", "True").lower() in ("1", "true", "yes")
 
     class Config:
         env_file = ".env"

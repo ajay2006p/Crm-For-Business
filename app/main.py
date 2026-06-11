@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
         logger.info("%s started", settings.app_name)
     except Exception as exc:
         logger.error("Startup failed (is MongoDB running?): %s", exc)
+        raise
     yield
     await close_db()
 
