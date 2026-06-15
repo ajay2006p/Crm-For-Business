@@ -6,10 +6,18 @@ const USER_KEY = 'rk_user';
 
 let currentUser = null;
 let leadsPage = 1;
+let selectedLeads = new Map(); // id -> {name, phone}
+let leadsCache = [];
 let scrapeJobId = null;
 let scrapePollTimer = null;
+let scrapeSaveFolder = '';   // folder id chosen on the scrape form
 let charts = {};
 let templatesCache = {};
+let foldersCache = [];
+let appSettings = {};          // cached business/integration settings
+let currentFolder = '';        // '' = all, 'unfiled', or a folder id
+let currentDetailLead = null;  // lead object open in detail modal
+let searchDebounce = null;
 
 /* ── Local fallback for Area API ─────────────────────────────────────────── */
 const LOCAL_CITY_META = {
@@ -51,6 +59,8 @@ const TAB_TITLES = {
   payroll: ['Payroll', 'Salary processing'],
   holidays: ['Holidays', 'Company calendar'],
   invoices: ['Invoices', 'Billing & GST'],
+  quotations: ['Quotations', 'Estimates & proposals'],
+  expenses: ['Expenses', 'Spend tracking'],
   documents: ['Documents', 'File management'],
   'qr-generator': ['QR Generator', 'PDF QR insertion'],
   analytics: ['Analytics', 'Business intelligence'],
@@ -91,6 +101,14 @@ function fmtDate(d) {
 
 function safeArr(val) {
   return Array.isArray(val) ? val : [];
+}
+
+// Build a readable location for a lead: prefer city/area, else derive from address.
+function leadLocation(l) {
+  const city = (l.city || '').trim();
+  const area = (l.area || '').trim();
+  if (city || area) return [area, city].filter(Boolean).join(', ');
+  return (l.address || '').trim();
 }
 
 function safeObj(val) {
@@ -207,13 +225,13 @@ async function api(path, options = {}) {
 
 /* ── Auth ──────────────────────────────────────────────────────────────────── */
 function showLogin() {
-  document.getElementById('login-page').classList.remove('hidden');
-  document.getElementById('main-app').classList.add('hidden');
+  document.getElementById('login-page')?.classList.remove('hidden');
+  document.getElementById('main-app')?.classList.add('hidden');
 }
 
 function showApp() {
-  document.getElementById('login-page').classList.add('hidden');
-  document.getElementById('main-app').classList.remove('hidden');
+  document.getElementById('login-page')?.classList.add('hidden');
+  document.getElementById('main-app')?.classList.remove('hidden');
   updateUserUI();
 }
 
@@ -257,9 +275,11 @@ function navigateTab(tab) {
 
   const loaders = {
     dashboard: loadDashboard,
-    leads: loadLeads,
+    leads: () => { loadFolders(); loadLeads(); },
+    quotations: loadQuotations,
+    expenses: loadExpenses,
     'area-api': checkAreaAPIStatus,
-    outreach: () => { loadTemplates(); loadCampaigns(); },
+    outreach: () => { loadTemplates().then(renderCampaignRecipients); loadCampaigns(); },
     meetings: loadMeetings,
     tasks: loadTasks,
     employees: loadEmployees,
@@ -300,12 +320,20 @@ async function loadDashboard() {
       if (errBar) errBar.classList.add('hidden');
     }
     const data = safeObj(res.data);
-    document.getElementById('stat-leads').textContent = data.total_leads ?? 0;
-    document.getElementById('stat-contacted').textContent = data.contacted_leads ?? 0;
-    document.getElementById('stat-meetings').textContent = data.meetings ?? 0;
-    document.getElementById('stat-employees').textContent = data.employees ?? 0;
-    document.getElementById('stat-payroll').textContent = fmtMoney(data.payroll_total);
-    document.getElementById('stat-revenue').textContent = fmtMoney(data.revenue_total);
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('stat-leads', data.total_leads ?? 0);
+    setText('stat-new-week', data.new_this_week ?? 0);
+    setText('stat-conversion', (data.conversion_rate ?? 0) + '%');
+    setText('stat-clients', data.clients ?? 0);
+    setText('stat-meetings', data.meetings ?? 0);
+    setText('stat-tasks', data.open_tasks ?? 0);
+    setText('stat-revenue', fmtMoney(data.revenue_total));
+    setText('stat-expenses', fmtMoney(data.expense_total));
+    setText('stat-net', fmtMoney(data.net_total));
+    setText('stat-payroll', fmtMoney(data.payroll_total));
+
+    renderFollowups(safeArr(data.due_followups));
+    renderRecentLeads(safeArr(data.recent_leads));
 
     const activities = safeArr(data.activities);
     const actEl = document.getElementById('dash-activities');
@@ -325,7 +353,7 @@ async function loadDashboard() {
     await renderDashChart();
   } catch (err) {
     if (errBar) errBar.classList.remove('hidden');
-    ['stat-leads','stat-contacted','stat-meetings','stat-employees','stat-payroll','stat-revenue'].forEach(id => {
+    ['stat-leads','stat-new-week','stat-conversion','stat-clients','stat-meetings','stat-tasks','stat-revenue','stat-expenses','stat-net','stat-payroll'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = '—';
     });
@@ -344,8 +372,8 @@ async function renderDashChart() {
     if (!labels.length) {
       dashChart = new Chart(ctx, {
         type: 'doughnut',
-        data: { labels: ['No data'], datasets: [{ data: [1], backgroundColor: ['#334155'] }] },
-        options: { plugins: { legend: { labels: { color: '#94a3b8' } } } },
+        data: { labels: ['No data'], datasets: [{ data: [1], backgroundColor: ['#e5e7eb'] }] },
+        options: { plugins: { legend: { labels: { color: '#6b7280' } } } },
       });
       return;
     }
@@ -353,23 +381,91 @@ async function renderDashChart() {
       type: 'doughnut',
       data: {
         labels,
-        datasets: [{ data: values, backgroundColor: ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'] }],
+        datasets: [{ data: values, backgroundColor: CHART_PALETTE }],
       },
-      options: { plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 12 } } } },
+      options: { plugins: { legend: { position: 'bottom', labels: { color: '#374151', padding: 12 } } } },
     });
   } catch { /* chart optional on dashboard */ }
 }
 
+const CHART_PALETTE = ['#111827', '#4b5563', '#9ca3af', '#059669', '#d97706', '#dc2626', '#2563eb', '#7c3aed'];
+
+function renderFollowups(items) {
+  const el = document.getElementById('dash-followups');
+  const countEl = document.getElementById('dash-followup-count');
+  if (countEl) countEl.textContent = items.length;
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = '<p class="text-slate-500 text-sm py-4 text-center">No follow-ups due. You\'re all caught up.</p>';
+    return;
+  }
+  el.innerHTML = items.map(l => `
+    <div class="flex items-center gap-2 py-1.5 border-b border-white/5 cursor-pointer hover:bg-slate-900/40 rounded px-1 dash-followup-row" data-id="${esc(l.id)}">
+      <i class="fa-solid fa-circle-exclamation text-amber-500 text-xs"></i>
+      <div class="min-w-0 flex-1">
+        <p class="text-slate-200 text-sm truncate">${esc(l.name)}</p>
+        <p class="text-xs text-slate-500">${esc(l.phone_number || '—')} · due ${esc(l.follow_up_date || '')}</p>
+      </div>
+      <span class="badge ${badgeClass(l.status)}">${esc(l.status || 'New')}</span>
+    </div>`).join('');
+  el.querySelectorAll('.dash-followup-row').forEach(row => {
+    row.addEventListener('click', () => { navigateTab('leads'); setTimeout(() => openLeadDetail(row.dataset.id), 150); });
+  });
+}
+
+function renderRecentLeads(items) {
+  const tb = document.getElementById('dash-recent-leads');
+  if (!tb) return;
+  if (!items.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="text-slate-500 text-center py-5">No leads yet</td></tr>';
+    return;
+  }
+  tb.innerHTML = items.map(l => `
+    <tr class="cursor-pointer dash-recent-row" data-id="${esc(l.id)}">
+      <td class="font-medium text-white">${esc(l.name)}</td>
+      <td>${esc(l.phone_number || '—')}</td>
+      <td class="text-slate-300">${esc(leadLocation(l) || '—')}</td>
+      <td><span class="badge ${badgeClass(l.status)}">${esc(l.status || 'New')}</span></td>
+      <td class="text-slate-400 text-xs">${fmtDate(l.created_at)}</td>
+    </tr>`).join('');
+  tb.querySelectorAll('.dash-recent-row').forEach(row => {
+    row.addEventListener('click', () => { navigateTab('leads'); setTimeout(() => openLeadDetail(row.dataset.id), 150); });
+  });
+}
+
 /* ── Leads ─────────────────────────────────────────────────────────────────── */
-async function loadLeads(page = leadsPage) {
-  leadsPage = page;
-  const params = new URLSearchParams({ page, limit: 50 });
+function leadFilterParams() {
+  const params = new URLSearchParams();
   const q = document.getElementById('lead-filter-q')?.value?.trim();
   const status = document.getElementById('lead-filter-status')?.value;
   const city = document.getElementById('lead-filter-city')?.value?.trim();
+  const phone = document.getElementById('lead-filter-phone')?.value;
+  const website = document.getElementById('lead-filter-website')?.value;
+  const rating = document.getElementById('lead-filter-rating')?.value;
+  const followup = document.getElementById('lead-filter-followup')?.checked;
   if (q) params.set('q', q);
   if (status) params.set('status', status);
   if (city) params.set('city', city);
+  if (phone) params.set('has_phone', phone);
+  if (website) params.set('has_website', website);
+  if (rating) params.set('min_rating', rating);
+  if (followup) params.set('due_followup', 'true');
+  if (currentFolder) params.set('folder_id', currentFolder);
+  return params;
+}
+
+function resetLeadFilters() {
+  ['lead-filter-q', 'lead-filter-city'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['lead-filter-status', 'lead-filter-phone', 'lead-filter-website', 'lead-filter-rating'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const fu = document.getElementById('lead-filter-followup'); if (fu) fu.checked = false;
+  loadLeads(1);
+}
+
+async function loadLeads(page = leadsPage) {
+  leadsPage = page;
+  const params = leadFilterParams();
+  params.set('page', page);
+  params.set('limit', 50);
 
   try {
     const res = await api(`/api/leads?${params}`);
@@ -377,25 +473,56 @@ async function loadLeads(page = leadsPage) {
     const total = res.total ?? leads.length;
     document.getElementById('leads-count').textContent = `${total} leads (page ${page})`;
 
+    leadsCache = leads;
     const tbody = document.getElementById('leads-tbody');
     if (!leads.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-slate-500 text-center py-6">No leads found</td></tr>';
+      const inFolder = currentFolder && currentFolder !== 'unfiled';
+      const folderName = (foldersCache.find(f => f.id === currentFolder) || {}).name || 'this folder';
+      tbody.innerHTML = inFolder
+        ? `<tr><td colspan="7" class="text-slate-500 text-center py-6">
+             <i class="fa-solid fa-folder-open text-2xl mb-2 block opacity-40"></i>
+             <b>${esc(folderName)}</b> is empty.<br>
+             <span class="text-xs">Tick leads in <button class="underline open-allleads">All Leads</button>, then choose <b>“Move to folder…”</b> — or click <b>Add Lead</b> to create one here.</span>
+           </td></tr>`
+        : '<tr><td colspan="7" class="text-slate-500 text-center py-6">No leads found</td></tr>';
+      const jump = tbody.querySelector('.open-allleads');
+      if (jump) jump.addEventListener('click', () => { currentFolder = ''; loadFolders(); loadLeads(1); });
+      updateSelectionUI();
       return;
     }
-    tbody.innerHTML = leads.map(l => `
+    tbody.innerHTML = leads.map(l => {
+      const loc = leadLocation(l);
+      const checked = selectedLeads.has(l.id) ? 'checked' : '';
+      const rating = l.reviews_average != null
+        ? `<span class="text-amber-500 font-medium">${esc(l.reviews_average)}</span>`
+        : '<span class="text-slate-400">—</span>';
+      return `
       <tr>
-        <td class="font-medium text-white">${esc(l.name)}</td>
+        <td><input type="checkbox" class="lead-check" data-id="${esc(l.id)}" data-name="${esc(l.name)}" data-phone="${esc(l.phone_number || '')}" ${checked} /></td>
+        <td class="font-medium text-white"><button class="open-lead text-left hover:underline block w-full truncate" data-id="${esc(l.id)}" title="${esc(l.name)}">${esc(l.name)}</button></td>
         <td>${esc(l.phone_number || '—')}</td>
-        <td>${esc(l.city || '—')}</td>
-        <td>${esc(l.area || '—')}</td>
+        <td class="text-slate-300" title="${esc(loc)}">${esc(loc || '—')}</td>
         <td><span class="badge ${badgeClass(l.status)}">${esc(l.status || 'New')}</span></td>
-        <td>${l.reviews_average != null ? esc(l.reviews_average) : '—'}</td>
-        <td>
-          <button class="btn-secondary text-xs copy-lead-id" data-id="${esc(l.id)}">Copy ID</button>
-          <button class="btn-secondary text-xs delete-lead ml-1" data-id="${esc(l.id)}">Delete</button>
+        <td>${rating}</td>
+        <td class="whitespace-nowrap">
+          <button class="btn-secondary text-xs open-lead" data-id="${esc(l.id)}" title="Open / timeline"><i class="fa-solid fa-eye"></i></button>
+          <button class="btn-secondary text-xs delete-lead ml-1" data-id="${esc(l.id)}" title="Delete lead"><i class="fa-solid fa-trash"></i></button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
 
+    tbody.querySelectorAll('.lead-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedLeads.set(cb.dataset.id, { name: cb.dataset.name, phone: cb.dataset.phone });
+        else selectedLeads.delete(cb.dataset.id);
+        updateSelectionUI();
+      });
+    });
+    updateSelectionUI();
+
+    tbody.querySelectorAll('.open-lead').forEach(btn => {
+      btn.addEventListener('click', () => openLeadDetail(btn.dataset.id));
+    });
     tbody.querySelectorAll('.copy-lead-id').forEach(btn => {
       btn.addEventListener('click', () => {
         navigator.clipboard.writeText(btn.dataset.id);
@@ -417,6 +544,30 @@ async function loadLeads(page = leadsPage) {
   }
 }
 
+function updateSelectionUI() {
+  const count = selectedLeads.size;
+  const bar = document.getElementById('leads-bulk-bar');
+  if (bar) {
+    bar.classList.toggle('hidden', count === 0);
+    bar.classList.toggle('flex', count > 0);
+    const c = document.getElementById('leads-selected-count');
+    if (c) c.textContent = count;
+  }
+  // sync the header "select all" checkbox against current page rows
+  const all = document.getElementById('leads-select-all');
+  if (all) {
+    const rows = [...document.querySelectorAll('.lead-check')];
+    all.checked = rows.length > 0 && rows.every(cb => cb.checked);
+    all.indeterminate = rows.some(cb => cb.checked) && !all.checked;
+  }
+}
+
+function clearLeadSelection() {
+  selectedLeads.clear();
+  document.querySelectorAll('.lead-check').forEach(cb => { cb.checked = false; });
+  updateSelectionUI();
+}
+
 async function startScrape(e) {
   e.preventDefault();
   const form = document.getElementById('scrape-form');
@@ -430,13 +581,19 @@ async function startScrape(e) {
     no_website_only: document.getElementById('scrape-no-website').checked,
   };
 
+  // Remember which folder to file the results into (chosen on the scrape form)
+  scrapeSaveFolder = document.getElementById('scrape-folder')?.value || '';
+
   setLoading(true, 'Starting scrape…');
   try {
     const res = await api('/api/leads/scrape', { method: 'POST', body });
     scrapeJobId = res.job_id;
     document.getElementById('scrape-status').classList.remove('hidden');
     document.getElementById('scrape-save-btn').classList.add('hidden');
-    notify('Scrape job started', 'success');
+    const bar = document.getElementById('scrape-progress-bar');
+    bar.classList.add('scrape-working');   // animated "working" stripes
+    bar.style.width = '100%';
+    notify('Scrape started — a Chromium window will open and work automatically', 'info');
     pollScrapeStatus();
   } catch (err) {
     notify(err.message, 'error');
@@ -459,29 +616,71 @@ function pollScrapeStatus() {
       statusEl.className = status === 'error' ? 'badge badge-danger' : status === 'completed' ? 'badge badge-success' : 'badge badge-warn';
 
       const lastLog = safeArr(res.log).slice(-1)[0] || '';
+      const bar = document.getElementById('scrape-progress-bar');
+      const running = !(status === 'done' || status === 'completed' || status === 'error');
+
       document.getElementById('scrape-progress-text').textContent =
         status === 'error'
-          ? (lastLog || 'Scrape failed — check Playwright installation')
-          : `${found} / ${target} found · ${res.current_area || ''}`;
-      const pct = target ? Math.min(100, (found / target) * 100) : 0;
-      document.getElementById('scrape-progress-bar').style.width = pct + '%';
+          ? (lastLog || 'Scrape failed — check the Chromium window / Playwright')
+          : running
+            ? `Working… ${found} / ${target} found${res.current_area ? ' · ' + res.current_area : ''}`
+            : `${found} / ${target} found`;
 
-      if (status === 'done' || status === 'completed' || status === 'error') {
+      if (running) {
+        // keep the animated full-width "working" bar so it's clearly busy even at 0 found
+        bar.classList.add('scrape-working');
+        bar.style.width = '100%';
+      } else {
+        bar.classList.remove('scrape-working');
+        bar.style.width = (target ? Math.min(100, (found / target) * 100) : 0) + '%';
+      }
+
+      if (!running) {
         clearInterval(scrapePollTimer);
-        if (found > 0) document.getElementById('scrape-save-btn').classList.remove('hidden');
-        if (status === 'error') notify('Scrape finished with errors', 'warning');
-        else notify(`Scrape complete: ${found} leads found`, 'success');
+        if (status === 'error') {
+          notify('Scrape finished with errors — see the message above', 'error');
+        } else if (found > 0) {
+          // Auto-save the results into the chosen folder
+          autoSaveScrape(found);
+        } else {
+          notify('Scrape complete, but 0 leads were found. Try a broader search or a different area/scope.', 'warning');
+        }
       }
     } catch { /* keep polling */ }
-  }, 2500);
+  }, 2000);
+}
+
+async function autoSaveScrape(found) {
+  if (!scrapeJobId) return;
+  setLoading(true, 'Saving leads…');
+  try {
+    const fq = (scrapeSaveFolder && scrapeSaveFolder !== 'unfiled') ? `?folder_id=${encodeURIComponent(scrapeSaveFolder)}` : '';
+    const res = await api(`/api/leads/scrape/${scrapeJobId}/save${fq}`, { method: 'POST' });
+    const folderName = (foldersCache.find(f => f.id === scrapeSaveFolder) || {}).name;
+    const into = folderName ? ` into “${folderName}”` : '';
+    const parts = [`${res.inserted || 0} new`];
+    if (res.filed) parts.push(`${res.filed} existing filed`);
+    if (res.skipped) parts.push(`${res.skipped} duplicates`);
+    notify(`Saved${into}: ${parts.join(', ')}`, 'success');
+    loadFolders();
+    if (scrapeSaveFolder) { currentFolder = scrapeSaveFolder; }
+    loadLeads(1);
+  } catch (err) {
+    notify('Auto-save failed: ' + err.message + ' — use “Save to Database”.', 'error');
+    document.getElementById('scrape-save-btn').classList.remove('hidden');
+  } finally {
+    setLoading(false);
+  }
 }
 
 async function saveScrapeResults() {
   if (!scrapeJobId) return;
   setLoading(true, 'Saving leads…');
   try {
-    const res = await api(`/api/leads/scrape/${scrapeJobId}/save`, { method: 'POST' });
+    const fq = (currentFolder && currentFolder !== 'unfiled') ? `?folder_id=${encodeURIComponent(currentFolder)}` : '';
+    const res = await api(`/api/leads/scrape/${scrapeJobId}/save${fq}`, { method: 'POST' });
     notify(`Saved ${res.inserted || 0} leads to database`, 'success');
+    loadFolders();
     loadLeads();
   } catch (err) {
     notify(err.message, 'error');
@@ -490,11 +689,20 @@ async function saveScrapeResults() {
   }
 }
 
+function openLeadModal() {
+  // Default the folder dropdown to the folder currently being viewed (if any real folder)
+  const sel = document.getElementById('lead-form-folder');
+  if (sel) sel.value = (currentFolder && currentFolder !== 'unfiled') ? currentFolder : '';
+  document.getElementById('lead-modal').classList.remove('hidden');
+}
+
 async function createLead(e) {
   e.preventDefault();
   const form = document.getElementById('lead-form');
   if (!validateForm(form)) return;
   const data = formToObject(form);
+  if (!data.folder_id) delete data.folder_id;
+  if (!data.follow_up_date) delete data.follow_up_date;
   setLoading(true);
   try {
     await api('/api/leads', { method: 'POST', body: data });
@@ -756,6 +964,7 @@ async function loadTemplates() {
         document.getElementById('tpl-name').value = t.name || '';
         document.getElementById('tpl-channel').value = t.channel || 'whatsapp';
         document.getElementById('tpl-body').value = t.body || '';
+        document.getElementById('tpl-image').value = t.image_url || '';
       });
     });
     list.querySelectorAll('.delete-tpl').forEach(btn => {
@@ -782,6 +991,7 @@ async function saveTemplate(e) {
     name: document.getElementById('tpl-name').value.trim(),
     channel: document.getElementById('tpl-channel').value,
     body: document.getElementById('tpl-body').value.trim(),
+    image_url: document.getElementById('tpl-image').value.trim(),
   };
   const editId = document.getElementById('template-edit-id').value;
 
@@ -804,14 +1014,85 @@ async function saveTemplate(e) {
   }
 }
 
+/* ── Outreach recipient picker (shares `selectedLeads` with the Leads tab) ──── */
+function renderCampaignRecipients() {
+  const wrap = document.getElementById('campaign-recipients');
+  if (!wrap) return;
+  document.getElementById('campaign-recipient-count').textContent = selectedLeads.size;
+  if (!selectedLeads.size) {
+    wrap.innerHTML = '<span class="text-xs text-slate-500" id="campaign-recipients-empty">No recipients yet — select leads in the Leads tab or search above.</span>';
+    updateCampaignPreview();
+    return;
+  }
+  wrap.innerHTML = [...selectedLeads.entries()].map(([id, l]) => `
+    <span class="chip">
+      ${esc(l.name || 'Lead')}${l.phone ? ` · ${esc(l.phone)}` : ''}
+      <button type="button" class="recipient-remove hover:text-black" data-id="${esc(id)}"><i class="fa-solid fa-xmark"></i></button>
+    </span>`).join('');
+  wrap.querySelectorAll('.recipient-remove').forEach(b => b.addEventListener('click', () => {
+    selectedLeads.delete(b.dataset.id);
+    renderCampaignRecipients();
+    updateSelectionUI();
+  }));
+  updateCampaignPreview();
+}
+
+let campaignSearchTimer = null;
+function searchCampaignLeads() {
+  const q = document.getElementById('campaign-lead-search').value.trim();
+  const box = document.getElementById('campaign-lead-results');
+  clearTimeout(campaignSearchTimer);
+  if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  campaignSearchTimer = setTimeout(async () => {
+    try {
+      const res = await api(`/api/leads?${new URLSearchParams({ q, limit: 25 })}`);
+      const leads = safeArr(res.leads);
+      box.classList.remove('hidden');
+      box.innerHTML = leads.length
+        ? leads.map(l => `
+          <label class="flex items-center gap-2 text-xs text-slate-200 hover:bg-white/5 rounded px-1.5 py-1 cursor-pointer">
+            <input type="checkbox" class="campaign-pick" data-id="${esc(l.id)}" data-name="${esc(l.name)}" data-phone="${esc(l.phone_number || '')}" ${selectedLeads.has(l.id) ? 'checked' : ''} />
+            <span class="font-medium text-white">${esc(l.name)}</span>
+            <span class="text-slate-500">${esc(l.phone_number || '')}</span>
+          </label>`).join('')
+        : '<p class="text-xs text-slate-500 px-1.5 py-1">No matches</p>';
+      box.querySelectorAll('.campaign-pick').forEach(cb => cb.addEventListener('change', () => {
+        if (cb.checked) selectedLeads.set(cb.dataset.id, { name: cb.dataset.name, phone: cb.dataset.phone });
+        else selectedLeads.delete(cb.dataset.id);
+        renderCampaignRecipients();
+        updateSelectionUI();
+      }));
+    } catch (e) { notify(e.message, 'error'); }
+  }, 300);
+}
+
+async function updateCampaignPreview() {
+  const el = document.getElementById('campaign-preview');
+  if (!el) return;
+  const tplId = document.getElementById('campaign-template').value;
+  const tpl = templatesCache[tplId];
+  const first = [...selectedLeads.values()][0];
+  if (!tpl || !tpl.body) { el.textContent = 'Select a template and recipient to preview.'; return; }
+  const sample = first || { name: 'there' };
+  try {
+    const res = await api('/api/outreach/preview', {
+      method: 'POST',
+      body: { body: tpl.body, image_url: tpl.image_url || '', lead: { name: sample.name, phone_number: sample.phone || '' } },
+    });
+    el.textContent = res.message || tpl.body;
+  } catch {
+    el.textContent = tpl.body;
+  }
+}
+
 async function createCampaign(e) {
   e.preventDefault();
   const form = document.getElementById('campaign-form');
   if (!validateForm(form)) return;
 
-  const leadIds = document.getElementById('campaign-leads').value.split(',').map(s => s.trim()).filter(Boolean);
+  const leadIds = [...selectedLeads.keys()];
   if (!leadIds.length) {
-    notify('Enter at least one lead ID', 'error');
+    notify('Select at least one recipient', 'error');
     return;
   }
 
@@ -829,14 +1110,30 @@ async function createCampaign(e) {
     const resultEl = document.getElementById('campaign-result');
     resultEl.classList.remove('hidden');
     const messages = safeArr(camp.messages);
+    const links = messages.filter(m => m.url).map(m => m.url);
     resultEl.innerHTML = `
-      <p class="text-emerald-400 font-medium mb-2">Campaign ready: ${camp.ready || messages.length} messages</p>
-      <div class="space-y-2 max-h-48 overflow-y-auto">${messages.slice(0, 10).map(m => `
-        <div class="text-xs glass rounded p-2">
-          <strong>${esc(m.name)}</strong> · ${esc(m.phone || '—')}
-          ${m.url ? `<a href="${esc(m.url)}" target="_blank" class="text-indigo-400 ml-2">Open WhatsApp</a>` : ''}
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-emerald-400 font-medium"><i class="fa-solid fa-circle-check mr-1"></i>${camp.ready || messages.length} message(s) ready${camp.skipped ? `, ${camp.skipped} skipped` : ''}</p>
+        ${links.length ? `<button type="button" id="campaign-open-all" class="btn-secondary text-xs">Open all WhatsApp</button>` : ''}
+      </div>
+      <div class="space-y-2 max-h-56 overflow-y-auto">${messages.map(m => `
+        <div class="text-xs glass rounded-lg p-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <span><strong class="text-white">${esc(m.name)}</strong> <span class="text-slate-500">${esc(m.phone || '—')}</span></span>
+            ${m.url ? `<a href="${esc(m.url)}" target="_blank" class="text-indigo-400 whitespace-nowrap"><i class="fa-brands fa-whatsapp mr-1"></i>Open</a>` : '<span class="text-slate-600">no phone</span>'}
+          </div>
+          <p class="text-slate-400 mt-1 line-clamp-2">${esc(m.message || '')}</p>
         </div>`).join('')}</div>`;
-    notify('Campaign created', 'success');
+    const openAll = document.getElementById('campaign-open-all');
+    if (openAll) openAll.addEventListener('click', () => {
+      links.slice(0, 20).forEach((u, i) => setTimeout(() => window.open(u, '_blank'), i * 300));
+    });
+    notify(`Campaign created — ${messages.length} message(s) ready`, 'success');
+    document.getElementById('campaign-lead-search').value = '';
+    document.getElementById('campaign-lead-results').classList.add('hidden');
+    selectedLeads.clear();
+    renderCampaignRecipients();
+    updateSelectionUI();
     loadCampaigns();
   } catch (err) {
     notify(err.message, 'error');
@@ -872,16 +1169,22 @@ async function loadMeetings() {
     const meetings = safeArr(res.meetings);
     const tbody = document.getElementById('meetings-tbody');
     if (!meetings.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-slate-500 py-4">No meetings</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-500 py-4">No meetings</td></tr>';
       return;
     }
-    tbody.innerHTML = meetings.map(m => `
+    tbody.innerHTML = meetings.map((m, i) => `
       <tr>
         <td class="text-white">${esc(m.title)}</td>
         <td>${fmtDate(m.scheduled_at)}</td>
         <td><span class="badge ${badgeClass(m.status)}">${esc(m.status)}</span></td>
         <td class="text-slate-400">${esc(m.notes || '—')}</td>
+        <td><button class="btn-secondary text-xs notify-meeting" data-i="${i}"><i class="fa-brands fa-whatsapp mr-1"></i>Team</button></td>
       </tr>`).join('');
+    tbody.querySelectorAll('.notify-meeting').forEach(btn => btn.addEventListener('click', () => {
+      const m = meetings[btn.dataset.i];
+      const text = `📅 *Meeting: ${m.title}*\n🕒 ${fmtDate(m.scheduled_at)}\nStatus: ${m.status || 'Scheduled'}${m.notes ? `\n📝 ${m.notes}` : ''}\n\n— ${appSettings.company || 'Team'}`;
+      openWhatsApp(appSettings.team_whatsapp, text);
+    }));
   } catch (err) {
     notify(err.message, 'error');
   }
@@ -915,14 +1218,23 @@ async function loadTasks() {
       tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-500 py-4">No tasks</td></tr>';
       return;
     }
-    tbody.innerHTML = tasks.map(t => `
+    tbody.innerHTML = tasks.map((t, i) => `
       <tr>
         <td class="text-white">${esc(t.title)}</td>
         <td><span class="badge ${badgeClass(t.priority)}">${esc(t.priority)}</span></td>
         <td>${esc(t.due_date || '—')}</td>
         <td><span class="badge ${badgeClass(t.status)}">${esc(t.status || 'Open')}</span></td>
-        <td><button class="btn-secondary text-xs complete-task" data-id="${esc(t.id)}">Complete</button></td>
+        <td class="whitespace-nowrap">
+          <button class="btn-secondary text-xs notify-task" data-i="${i}" title="Send to team WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
+          <button class="btn-secondary text-xs complete-task ml-1" data-id="${esc(t.id)}">Complete</button>
+        </td>
       </tr>`).join('');
+
+    tbody.querySelectorAll('.notify-task').forEach(btn => btn.addEventListener('click', () => {
+      const t = tasks[btn.dataset.i];
+      const text = `✅ *Task: ${t.title}*\nPriority: ${t.priority || 'Medium'}${t.due_date ? `\n📆 Due: ${t.due_date}` : ''}${t.description ? `\n${t.description}` : ''}\n\n— ${appSettings.company || 'Team'}`;
+      openWhatsApp(appSettings.team_whatsapp, text);
+    }));
 
     tbody.querySelectorAll('.complete-task').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -1394,18 +1706,32 @@ function updateQRPreview() {
   marker.style.width = px + 'px';
   marker.style.height = px + 'px';
   marker.style.top = marker.style.bottom = marker.style.left = marker.style.right = 'auto';
-  const pad = 8;
+  const pad = '8px';
   const positions = {
     'top-left': { top: pad, left: pad },
     'top-right': { top: pad, right: pad },
     'bottom-left': { bottom: pad, left: pad },
     'bottom-right': { bottom: pad, right: pad },
-    center: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' },
+    center: { top: '50%', left: '50%' },
   };
   const pos = positions[position] || positions['bottom-right'];
   Object.assign(marker.style, pos);
-  if (position === 'center') marker.style.transform = 'translate(-50%, -50%)';
-  else marker.style.transform = '';
+  marker.style.transform = position === 'center' ? 'translate(-50%, -50%)' : '';
+
+  // Draw faux document lines once so the preview looks like a page
+  const lines = document.getElementById('qr-doc-lines');
+  if (lines && !lines.dataset.drawn) {
+    const widths = [70, 95, 88, 60, 92, 80, 45, 90, 85, 55];
+    lines.innerHTML = '<div style="height:10px;width:55%;background:#1f2937;border-radius:2px;margin-bottom:6px"></div>' +
+      widths.map(w => `<div style="height:6px;width:${w}%;background:#e5e7eb;border-radius:2px"></div>`).join('');
+    lines.dataset.drawn = '1';
+  }
+}
+
+function showQRFileName() {
+  const f = document.getElementById('qr-file').files[0];
+  const el = document.getElementById('qr-doc-name');
+  if (el) el.textContent = f ? `📄 ${f.name}` : 'No document selected — choose a PDF on the left';
 }
 
 async function generateQR(e) {
@@ -1471,12 +1797,11 @@ function makeChart(id, type, labels, data, label) {
   if (!labels.length) {
     charts[id] = new Chart(ctx, {
       type,
-      data: { labels: ['No data'], datasets: [{ label, data: [0], backgroundColor: '#334155' }] },
+      data: { labels: ['No data'], datasets: [{ label, data: [0], backgroundColor: '#e5e7eb' }] },
       options: chartOptions(type),
     });
     return;
   }
-  const colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
   charts[id] = new Chart(ctx, {
     type,
     data: {
@@ -1484,10 +1809,11 @@ function makeChart(id, type, labels, data, label) {
       datasets: [{
         label,
         data,
-        backgroundColor: type === 'line' ? 'rgba(99,102,241,0.2)' : colors.slice(0, labels.length),
-        borderColor: type === 'line' ? '#6366f1' : undefined,
+        backgroundColor: type === 'line' ? 'rgba(17,24,39,0.08)' : CHART_PALETTE.slice(0, labels.length),
+        borderColor: type === 'line' ? '#111827' : undefined,
+        borderWidth: type === 'line' ? 2 : 0,
         fill: type === 'line',
-        tension: 0.3,
+        tension: 0.35,
       }],
     },
     options: chartOptions(type),
@@ -1497,10 +1823,10 @@ function makeChart(id, type, labels, data, label) {
 function chartOptions(type) {
   return {
     responsive: true,
-    plugins: { legend: { labels: { color: '#94a3b8' } } },
+    plugins: { legend: { labels: { color: '#374151' } } },
     scales: type === 'line' || type === 'bar' ? {
-      x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-      y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+      x: { ticks: { color: '#6b7280' }, grid: { color: '#eef0f2' } },
+      y: { ticks: { color: '#6b7280' }, grid: { color: '#eef0f2' } },
     } : {},
   };
 }
@@ -1517,6 +1843,16 @@ async function loadAnalytics() {
     makeChart('chart-meetings-status', 'doughnut', Object.keys(meetings), Object.values(meetings), 'Meetings');
     makeChart('chart-payroll', 'bar', Object.keys(payroll).sort(), Object.keys(payroll).sort().map(k => payroll[k]), 'Payroll');
     makeChart('chart-revenue', 'line', Object.keys(revenue).sort(), Object.keys(revenue).sort().map(k => revenue[k]), 'Revenue');
+
+    // KPI cards from dashboard summary
+    try {
+      const sum = safeObj((await api('/api/dashboard/summary')).data);
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      set('an-leads', sum.total_leads ?? 0);
+      set('an-conv', (sum.conversion_rate ?? 0) + '%');
+      set('an-rev', fmtMoney(sum.revenue_total));
+      set('an-exp', fmtMoney(sum.expense_total));
+    } catch { /* KPIs optional */ }
   } catch (err) {
     notify(err.message, 'error');
   }
@@ -1640,6 +1976,7 @@ async function loadSettings() {
   try {
     const res = await api('/api/settings');
     const s = safeObj(res.settings);
+    appSettings = s;
     const form = document.getElementById('settings-form');
     if (!form) return;
     for (const [key, val] of Object.entries(s)) {
@@ -1649,6 +1986,28 @@ async function loadSettings() {
   } catch (err) {
     notify('Could not load settings: ' + err.message, 'error');
   }
+}
+
+/* ── WhatsApp helpers (click-to-chat, no API key) ────────────────────────── */
+function waNumber(raw) {
+  const cc = (appSettings.whatsapp_country_code || '91').replace(/\D/g, '');
+  let digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10) digits = cc + digits;
+  return digits;
+}
+function waLink(number, text) {
+  const num = waNumber(number);
+  const base = num ? `https://wa.me/${num}` : 'https://wa.me/';
+  return `${base}?text=${encodeURIComponent(text || '')}`;
+}
+function openWhatsApp(number, text) {
+  if (!number && !appSettings.team_whatsapp) {
+    notify('Set a Team WhatsApp number in Settings → Integrations first', 'warning');
+    navigateTab('settings');
+    return;
+  }
+  window.open(waLink(number || appSettings.team_whatsapp, text), '_blank');
 }
 
 async function saveSettings(e) {
@@ -1666,18 +2025,408 @@ async function saveSettings(e) {
   }
 }
 
+/* ── Folders ─────────────────────────────────────────────────────────────── */
+async function loadFolders() {
+  try {
+    const res = await api('/api/folders');
+    foldersCache = safeArr(res.folders);
+    renderFolders(res.total_leads ?? 0, res.unfiled ?? 0);
+    populateFolderSelects();
+  } catch (err) { /* folders optional */ }
+}
+
+function renderFolders(total, unfiled) {
+  const el = document.getElementById('folders-list');
+  if (!el) return;
+  const row = (id, icon, label, count) => `
+    <div class="folder-item ${currentFolder === id ? 'active' : ''}" data-folder="${esc(id)}">
+      <i class="fa-solid ${icon} text-xs w-4"></i><span class="truncate">${esc(label)}</span>
+      <span class="folder-count">${count}</span>
+      ${id && id !== 'unfiled' ? `<button class="folder-del ml-1 opacity-60 hover:opacity-100" data-id="${esc(id)}" title="Delete folder"><i class="fa-solid fa-xmark"></i></button>` : ''}
+    </div>`;
+  let html = row('', 'fa-inbox', 'All Leads', total);
+  html += row('unfiled', 'fa-folder-open', 'Unfiled', unfiled);
+  html += foldersCache.map(f => row(f.id, 'fa-folder', f.name, f.lead_count ?? 0)).join('');
+  el.innerHTML = html;
+  el.querySelectorAll('.folder-item').forEach(item => {
+    item.addEventListener('click', e => {
+      if (e.target.closest('.folder-del')) return;
+      currentFolder = item.dataset.folder;
+      renderFolders(total, unfiled);
+      loadLeads(1);
+    });
+  });
+  el.querySelectorAll('.folder-del').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('Delete this folder? Leads inside it will become Unfiled.')) return;
+      try {
+        await api(`/api/folders/${btn.dataset.id}`, { method: 'DELETE' });
+        if (currentFolder === btn.dataset.id) currentFolder = '';
+        notify('Folder deleted', 'success');
+        loadFolders(); loadLeads(1);
+      } catch (err) { notify(err.message, 'error'); }
+    });
+  });
+}
+
+function populateFolderSelects() {
+  const opts = '<option value="">— None —</option>' +
+    foldersCache.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
+  const lf = document.getElementById('lead-form-folder');
+  if (lf) lf.innerHTML = opts;
+  const bf = document.getElementById('bulk-folder-select');
+  if (bf) bf.innerHTML = '<option value="">Move to folder…</option><option value="unfiled">— Unfiled —</option>' +
+    foldersCache.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
+  const sf = document.getElementById('scrape-folder');
+  if (sf) {
+    const prev = sf.value || ((currentFolder && currentFolder !== 'unfiled') ? currentFolder : '');
+    sf.innerHTML = '<option value="">— No folder (Unfiled) —</option>' +
+      foldersCache.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('');
+    sf.value = prev;
+  }
+}
+
+async function createFolder(e) {
+  e.preventDefault();
+  const form = document.getElementById('folder-form');
+  if (!validateForm(form)) return;
+  try {
+    await api('/api/folders', { method: 'POST', body: formToObject(form) });
+    document.getElementById('folder-modal').classList.add('hidden');
+    form.reset();
+    notify('Folder created', 'success');
+    loadFolders();
+  } catch (err) { notify(err.message, 'error'); }
+}
+
+/* ── Bulk actions & export ───────────────────────────────────────────────── */
+async function bulkLeadAction(action, value = '') {
+  const ids = [...selectedLeads.keys()];
+  if (!ids.length) { notify('No leads selected', 'warning'); return; }
+  if (action === 'delete' && !confirm(`Delete ${ids.length} lead(s)? This cannot be undone.`)) return;
+  setLoading(true, 'Updating…');
+  try {
+    const res = await api('/api/leads/bulk', { method: 'POST', body: { ids, action, value } });
+    notify(`${res.affected} lead(s) updated`, 'success');
+    clearLeadSelection();
+    loadFolders();
+    loadLeads();
+  } catch (err) { notify(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+async function exportLeads() {
+  const params = leadFilterParams();
+  params.set('limit', 10000);
+  setLoading(true, 'Exporting…');
+  try {
+    const res = await api(`/api/leads/export?${params}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'leads_export.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    notify('CSV downloaded', 'success');
+  } catch (err) { notify('Export failed: ' + err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+/* ── Lead detail / timeline ──────────────────────────────────────────────── */
+const KIND_ICON = { note: 'fa-note-sticky', call: 'fa-phone', email: 'fa-envelope', whatsapp: 'fa-whatsapp', meeting: 'fa-handshake', created: 'fa-plus', updated: 'fa-pen' };
+
+async function openLeadDetail(id) {
+  try {
+    const res = await api(`/api/leads/${id}`);
+    currentDetailLead = res.lead;
+    const l = currentDetailLead;
+    document.getElementById('ld-name').textContent = l.name || 'Lead';
+    document.getElementById('ld-sub').textContent = [l.phone_number, leadLocation(l)].filter(Boolean).join(' · ');
+    document.getElementById('ld-status').value = l.status || 'New';
+    document.getElementById('ld-followup').value = (l.follow_up_date || '').slice(0, 10);
+    const wa = document.getElementById('ld-whatsapp');
+    const digits = (l.phone_number || '').replace(/[^\d]/g, '');
+    if (digits) { wa.href = `https://wa.me/${digits}`; wa.classList.remove('hidden'); }
+    else wa.classList.add('hidden');
+    renderTimeline(safeArr(l.activity_history));
+    document.getElementById('ld-note-text').value = '';
+    document.getElementById('lead-detail-modal').classList.remove('hidden');
+  } catch (err) { notify(err.message, 'error'); }
+}
+
+function renderTimeline(hist) {
+  const el = document.getElementById('ld-timeline');
+  if (!hist.length) { el.innerHTML = '<p class="text-slate-500 text-sm py-3 text-center">No activity yet.</p>'; return; }
+  el.innerHTML = [...hist].reverse().map(h => {
+    const icon = KIND_ICON[(h.kind || h.action || '').toLowerCase()] || 'fa-circle-dot';
+    const fa = icon === 'fa-whatsapp' ? 'fa-brands' : 'fa-solid';
+    return `<div class="flex gap-2 items-start py-1.5 border-b border-white/5">
+      <i class="${fa} ${icon} text-slate-400 text-xs mt-1 w-4 text-center"></i>
+      <div class="min-w-0 flex-1">
+        <p class="text-slate-200 text-sm">${esc(h.text || h.action || 'Activity')}</p>
+        <p class="text-xs text-slate-500">${esc(h.action || '')}${h.by ? ' · ' + esc(h.by) : ''} · ${fmtDate(h.at)}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveLeadDetail() {
+  if (!currentDetailLead) return;
+  const body = {
+    status: document.getElementById('ld-status').value,
+    follow_up_date: document.getElementById('ld-followup').value || null,
+  };
+  try {
+    await api(`/api/leads/${currentDetailLead.id}`, { method: 'PUT', body });
+    notify('Lead updated', 'success');
+    loadLeads(); loadFolders();
+    openLeadDetail(currentDetailLead.id);
+  } catch (err) { notify(err.message, 'error'); }
+}
+
+async function addLeadNote() {
+  if (!currentDetailLead) return;
+  const text = document.getElementById('ld-note-text').value.trim();
+  if (!text) { notify('Enter a note', 'warning'); return; }
+  const kind = document.getElementById('ld-note-kind').value;
+  try {
+    await api(`/api/leads/${currentDetailLead.id}/note`, { method: 'POST', body: { text, kind } });
+    document.getElementById('ld-note-text').value = '';
+    openLeadDetail(currentDetailLead.id);
+  } catch (err) { notify(err.message, 'error'); }
+}
+
+/* ── Expenses ────────────────────────────────────────────────────────────── */
+async function loadExpenses() {
+  const month = document.getElementById('expense-filter-month')?.value?.trim();
+  const params = new URLSearchParams();
+  if (month) params.set('month', month);
+  try {
+    const res = await api(`/api/finance/expenses?${params}`);
+    const expenses = safeArr(res.expenses);
+    document.getElementById('expense-total').textContent = fmtMoney(res.total);
+    const tb = document.getElementById('expenses-tbody');
+    tb.innerHTML = expenses.length ? expenses.map(e => `
+      <tr>
+        <td class="text-slate-400 text-xs whitespace-nowrap">${esc((e.date || '').slice(0,10))}</td>
+        <td class="font-medium text-white">${esc(e.title)}</td>
+        <td><span class="chip">${esc(e.category || 'General')}</span></td>
+        <td class="text-slate-300">${esc(e.vendor || '—')}</td>
+        <td class="text-slate-300">${esc(e.payment_method || '—')}</td>
+        <td class="font-medium">${fmtMoney(e.amount)}</td>
+        <td><button class="btn-secondary text-xs del-expense" data-id="${esc(e.id)}"><i class="fa-solid fa-trash"></i></button></td>
+      </tr>`).join('') : '<tr><td colspan="7" class="text-slate-500 text-center py-5">No expenses recorded</td></tr>';
+    tb.querySelectorAll('.del-expense').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('Delete this expense?')) return;
+      try { await api(`/api/finance/expenses/${btn.dataset.id}`, { method: 'DELETE' }); notify('Deleted', 'success'); loadExpenses(); }
+      catch (err) { notify(err.message, 'error'); }
+    }));
+    renderExpenseChart(safeObj(res.by_category));
+  } catch (err) { notify(err.message, 'error'); }
+}
+
+function renderExpenseChart(byCat) {
+  const ctx = document.getElementById('expense-chart');
+  if (!ctx) return;
+  if (charts.expense) charts.expense.destroy();
+  const labels = Object.keys(byCat);
+  const values = Object.values(byCat);
+  charts.expense = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: labels.length ? labels : ['No data'], datasets: [{ data: values.length ? values : [1], backgroundColor: labels.length ? CHART_PALETTE : ['#e5e7eb'] }] },
+    options: { plugins: { legend: { position: 'bottom', labels: { color: '#374151', padding: 10, font: { size: 11 } } } } },
+  });
+}
+
+async function createExpense(e) {
+  e.preventDefault();
+  const form = document.getElementById('expense-form');
+  if (!validateForm(form)) return;
+  const data = formToObject(form);
+  data.amount = parseFloat(data.amount) || 0;
+  setLoading(true);
+  try {
+    await api('/api/finance/expenses', { method: 'POST', body: data });
+    notify('Expense recorded', 'success');
+    form.reset();
+    loadExpenses();
+  } catch (err) { notify(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+/* ── Quotations ──────────────────────────────────────────────────────────── */
+async function loadQuotations() {
+  try {
+    const res = await api('/api/finance/quotations');
+    const quotes = safeArr(res.quotations);
+    const tb = document.getElementById('quotations-tbody');
+    tb.innerHTML = quotes.length ? quotes.map(q => `
+      <tr>
+        <td class="font-medium text-white">${esc(q.quote_number)}</td>
+        <td>${esc(q.client_name)}</td>
+        <td class="font-medium">${fmtMoney(q.total)}</td>
+        <td class="text-slate-400 text-xs">${esc(q.valid_until || '—')}</td>
+        <td><span class="badge ${badgeClass(q.status)}">${esc(q.status || 'Sent')}</span></td>
+        <td><a class="btn-secondary text-xs" href="/api/finance/quotations/${esc(q.id)}/pdf" target="_blank"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</a></td>
+      </tr>`).join('') : '<tr><td colspan="6" class="text-slate-500 text-center py-5">No quotations yet</td></tr>';
+  } catch (err) { notify(err.message, 'error'); }
+}
+
+function addQuoteItem() {
+  const wrap = document.getElementById('quote-items');
+  const div = document.createElement('div');
+  div.className = 'quote-item grid grid-cols-4 gap-2';
+  div.innerHTML = `
+    <input name="description" class="input-field" placeholder="Description" required />
+    <input name="qty" type="number" min="1" class="input-field" value="1" required />
+    <input name="price" type="number" min="0" step="0.01" class="input-field" placeholder="Price" required />
+    <button type="button" class="btn-secondary remove-quote-item text-xs">Remove</button>`;
+  div.querySelector('.remove-quote-item').addEventListener('click', () => div.remove());
+  wrap.appendChild(div);
+}
+
+async function createQuotation(e) {
+  e.preventDefault();
+  const form = document.getElementById('quotation-form');
+  if (!validateForm(form)) return;
+  const items = [...form.querySelectorAll('.quote-item')].map(row => ({
+    description: row.querySelector('[name=description]').value,
+    qty: parseFloat(row.querySelector('[name=qty]').value) || 1,
+    price: parseFloat(row.querySelector('[name=price]').value) || 0,
+  }));
+  const body = {
+    client_name: form.querySelector('[name=client_name]').value,
+    client_email: form.querySelector('[name=client_email]').value,
+    gst_percent: parseFloat(form.querySelector('[name=gst_percent]').value) || 0,
+    valid_until: form.querySelector('[name=valid_until]').value,
+    items,
+  };
+  setLoading(true);
+  try {
+    const res = await api('/api/finance/quotations', { method: 'POST', body });
+    notify(`Quotation ${res.quote_number} created`, 'success');
+    form.reset();
+    loadQuotations();
+  } catch (err) { notify(err.message, 'error'); }
+  finally { setLoading(false); }
+}
+
+/* ── Global search ───────────────────────────────────────────────────────── */
+async function runGlobalSearch() {
+  const q = document.getElementById('global-search').value.trim();
+  const box = document.getElementById('global-search-results');
+  if (q.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  try {
+    const res = await api(`/api/search?q=${encodeURIComponent(q)}`);
+    const results = safeArr(res.results);
+    if (!results.length) {
+      box.innerHTML = '<p class="text-slate-500 text-sm p-2">No matches</p>';
+    } else {
+      const icon = { lead: 'fa-user', company: 'fa-building', employee: 'fa-id-badge' };
+      box.innerHTML = results.map(r => `
+        <button class="gs-result w-full text-left flex items-center gap-2 p-2 rounded-lg hover:bg-slate-900/40" data-tab="${esc(r.tab)}" data-type="${esc(r.type)}" data-id="${esc(r.id)}">
+          <i class="fa-solid ${icon[r.type] || 'fa-circle'} text-slate-400 text-xs w-4"></i>
+          <span class="min-w-0 flex-1"><span class="text-slate-200 text-sm block truncate">${esc(r.title)}</span><span class="text-xs text-slate-500">${esc(r.type)} · ${esc(r.sub || '')}</span></span>
+        </button>`).join('');
+      box.querySelectorAll('.gs-result').forEach(btn => btn.addEventListener('click', () => {
+        box.classList.add('hidden');
+        document.getElementById('global-search').value = '';
+        navigateTab(btn.dataset.tab);
+        if (btn.dataset.type === 'lead') setTimeout(() => openLeadDetail(btn.dataset.id), 150);
+      }));
+    }
+    box.classList.remove('hidden');
+  } catch (err) { /* search optional */ }
+}
+
+/* ── Quick Add ───────────────────────────────────────────────────────────── */
+function openQuickAdd() { document.getElementById('quick-add-menu').classList.remove('hidden'); }
+function closeQuickAdd() { document.getElementById('quick-add-menu').classList.add('hidden'); }
+function quickAddGoto(tab) {
+  closeQuickAdd();
+  navigateTab(tab);
+  setTimeout(() => {
+    if (tab === 'leads') document.getElementById('lead-add-btn')?.click();
+    const firstInput = document.querySelector(`#tab-${tab} form input:not([type=hidden]), #tab-${tab} form select`);
+    firstInput?.focus();
+  }, 150);
+}
+
 /* ── Init ──────────────────────────────────────────────────────────────────── */
 function bindEvents() {
   document.getElementById('logout-btn').addEventListener('click', logout);
 
+  document.getElementById('scrape-toggle').addEventListener('click', () => {
+    const body = document.getElementById('scrape-collapse');
+    const chev = document.getElementById('scrape-chevron');
+    body.classList.toggle('hidden');
+    if (chev) chev.style.transform = body.classList.contains('hidden') ? '' : 'rotate(180deg)';
+  });
   document.getElementById('scrape-form').addEventListener('submit', startScrape);
   document.getElementById('scrape-save-btn').addEventListener('click', saveScrapeResults);
   document.getElementById('lead-filter-btn').addEventListener('click', () => loadLeads(1));
+  document.getElementById('lead-filter-reset').addEventListener('click', resetLeadFilters);
+  ['lead-filter-status', 'lead-filter-phone', 'lead-filter-website', 'lead-filter-rating'].forEach(id =>
+    document.getElementById(id).addEventListener('change', () => loadLeads(1)));
+  document.getElementById('lead-filter-followup').addEventListener('change', () => loadLeads(1));
   document.getElementById('leads-prev').addEventListener('click', () => { if (leadsPage > 1) loadLeads(leadsPage - 1); });
   document.getElementById('leads-next').addEventListener('click', () => loadLeads(leadsPage + 1));
-  document.getElementById('lead-add-btn').addEventListener('click', () => document.getElementById('lead-modal').classList.remove('hidden'));
+  document.getElementById('lead-add-btn').addEventListener('click', openLeadModal);
   document.getElementById('lead-modal-close').addEventListener('click', () => document.getElementById('lead-modal').classList.add('hidden'));
   document.getElementById('lead-form').addEventListener('submit', createLead);
+  document.getElementById('lead-filter-q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); loadLeads(1); } });
+  document.getElementById('leads-select-all').addEventListener('change', e => {
+    document.querySelectorAll('.lead-check').forEach(cb => {
+      cb.checked = e.target.checked;
+      if (e.target.checked) selectedLeads.set(cb.dataset.id, { name: cb.dataset.name, phone: cb.dataset.phone });
+      else selectedLeads.delete(cb.dataset.id);
+    });
+    updateSelectionUI();
+  });
+  document.getElementById('leads-clear-sel').addEventListener('click', clearLeadSelection);
+  document.getElementById('leads-to-outreach').addEventListener('click', () => navigateTab('outreach'));
+  document.getElementById('lead-export-btn').addEventListener('click', exportLeads);
+
+  // Folders
+  document.getElementById('folder-add-btn').addEventListener('click', () => document.getElementById('folder-modal').classList.remove('hidden'));
+  document.getElementById('folder-modal-close').addEventListener('click', () => document.getElementById('folder-modal').classList.add('hidden'));
+  document.getElementById('folder-form').addEventListener('submit', createFolder);
+
+  // Bulk actions
+  document.getElementById('bulk-status-select').addEventListener('change', e => { if (e.target.value) { bulkLeadAction('status', e.target.value); e.target.value = ''; } });
+  document.getElementById('bulk-folder-select').addEventListener('change', e => { if (e.target.value) { bulkLeadAction('move_folder', e.target.value); e.target.value = ''; } });
+  document.getElementById('bulk-delete-btn').addEventListener('click', () => bulkLeadAction('delete'));
+
+  // Lead detail modal
+  document.getElementById('lead-detail-close').addEventListener('click', () => document.getElementById('lead-detail-modal').classList.add('hidden'));
+  document.getElementById('ld-save').addEventListener('click', saveLeadDetail);
+  document.getElementById('ld-note-add').addEventListener('click', addLeadNote);
+  document.getElementById('ld-note-text').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addLeadNote(); } });
+
+  // Expenses
+  document.getElementById('expense-form').addEventListener('submit', createExpense);
+  document.getElementById('expense-load-btn').addEventListener('click', loadExpenses);
+
+  // Quotations
+  document.getElementById('quotation-form').addEventListener('submit', createQuotation);
+  document.getElementById('quote-add-item').addEventListener('click', addQuoteItem);
+  document.querySelectorAll('.remove-quote-item').forEach(btn => btn.addEventListener('click', () => btn.closest('.quote-item')?.remove()));
+
+  // Global search
+  const gs = document.getElementById('global-search');
+  gs.addEventListener('input', () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(runGlobalSearch, 250); });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#global-search') && !e.target.closest('#global-search-results')) {
+      document.getElementById('global-search-results').classList.add('hidden');
+    }
+  });
+
+  // Quick add
+  document.getElementById('quick-add-btn').addEventListener('click', openQuickAdd);
+  document.getElementById('quick-add-close').addEventListener('click', closeQuickAdd);
+  document.getElementById('quick-add-menu').addEventListener('click', e => { if (e.target.id === 'quick-add-menu') closeQuickAdd(); });
+  document.querySelectorAll('.quick-add-item').forEach(btn => btn.addEventListener('click', () => quickAddGoto(btn.dataset.tab)));
 
   document.getElementById('city-search-btn').addEventListener('click', searchCity);
   document.getElementById('city-search-q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchCity(); } });
@@ -1690,6 +2439,9 @@ function bindEvents() {
     document.getElementById('template-form').reset();
   });
   document.getElementById('campaign-form').addEventListener('submit', createCampaign);
+  document.getElementById('campaign-lead-search').addEventListener('input', searchCampaignLeads);
+  document.getElementById('campaign-clear-recipients').addEventListener('click', () => { selectedLeads.clear(); renderCampaignRecipients(); updateSelectionUI(); });
+  document.getElementById('campaign-template').addEventListener('change', updateCampaignPreview);
 
   document.getElementById('meeting-form').addEventListener('submit', createMeeting);
   document.getElementById('task-form').addEventListener('submit', createTask);
@@ -1708,6 +2460,7 @@ function bindEvents() {
   document.getElementById('qr-form').addEventListener('submit', generateQR);
   document.getElementById('qr-position').addEventListener('change', updateQRPreview);
   document.getElementById('qr-size').addEventListener('input', updateQRPreview);
+  document.getElementById('qr-file').addEventListener('change', showQRFileName);
 
   document.getElementById('company-form').addEventListener('submit', createCompany);
   document.getElementById('company-search-btn').addEventListener('click', () => loadCompanies(document.getElementById('company-search-q').value.trim()));
@@ -1715,6 +2468,7 @@ function bindEvents() {
 
   document.getElementById('user-form').addEventListener('submit', createUser);
   document.getElementById('settings-form').addEventListener('submit', saveSettings);
+  document.getElementById('analytics-refresh').addEventListener('click', loadAnalytics);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1722,11 +2476,18 @@ document.addEventListener('DOMContentLoaded', () => {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
 
+  if (window.Chart) {
+    Chart.defaults.color = '#374151';
+    Chart.defaults.borderColor = '#e5e7eb';
+    Chart.defaults.font.family = 'inherit';
+  }
+
   initNavigation();
   bindEvents();
   updateQRPreview();
 
   currentUser = { id: '000000000000000000000000', name: 'Admin', email: 'admin@recruitkr.com', role: 'Admin' };
   showApp();
+  loadSettings();          // cache business/integration settings for WhatsApp helpers
   navigateTab('dashboard');
 });

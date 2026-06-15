@@ -37,7 +37,10 @@ async def ensure_indexes() -> None:
     db = get_db()
     indexes = {
         "users": [("email", 1)],
-        "leads": [("phone_number", 1), ("name", 1), ("city", 1), ("status", 1), ("created_at", -1)],
+        "leads": [("phone_number", 1), ("name", 1), ("city", 1), ("status", 1), ("created_at", -1), ("folder_id", 1)],
+        "folders": [("name", 1), ("created_at", 1)],
+        "expenses": [("date", -1), ("category", 1)],
+        "quotations": [("quote_number", 1), ("created_at", -1)],
         "campaigns": [("created_at", -1)],
         "templates": [("name", 1)],
         "meetings": [("scheduled_at", 1), ("status", 1)],

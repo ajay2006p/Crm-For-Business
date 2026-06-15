@@ -40,6 +40,8 @@ class LeadCreate(BaseModel):
     status: LeadStatus = "New"
     notes: str = ""
     follow_up_date: str | None = None
+    folder_id: str | None = None
+    tags: list[str] = []
 
 
 class LeadUpdate(BaseModel):
@@ -54,6 +56,8 @@ class LeadUpdate(BaseModel):
     status: LeadStatus | None = None
     notes: str | None = None
     follow_up_date: str | None = None
+    folder_id: str | None = None
+    tags: list[str] | None = None
 
 
 class LeadFilter(BaseModel):
@@ -61,11 +65,36 @@ class LeadFilter(BaseModel):
     status: str = ""
     city: str = ""
     area: str = ""
+    folder_id: str = ""
     has_phone: bool | None = None
     has_website: bool | None = None
     min_rating: float | None = None
+    due_followup: bool | None = None
     page: int = 1
     limit: int = 50
+
+
+class FolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    color: str = "#2563eb"
+    description: str = ""
+
+
+class FolderUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=60)
+    color: str | None = None
+    description: str | None = None
+
+
+class LeadBulkAction(BaseModel):
+    ids: list[str] = Field(min_length=1)
+    action: Literal["status", "delete", "move_folder", "add_tag"]
+    value: str = ""
+
+
+class LeadNote(BaseModel):
+    text: str = Field(min_length=1)
+    kind: Literal["note", "call", "email", "whatsapp", "meeting"] = "note"
 
 
 class ScrapeRequest(BaseModel):
@@ -80,6 +109,7 @@ class TemplateCreate(BaseModel):
     name: str = Field(min_length=2)
     channel: Literal["whatsapp", "sms", "email"] = "whatsapp"
     body: str = Field(min_length=5)
+    image_url: str = ""
 
 
 class CampaignCreate(BaseModel):
@@ -152,6 +182,25 @@ class InvoiceCreate(BaseModel):
     notes: str = ""
 
 
+class ExpenseCreate(BaseModel):
+    title: str = Field(min_length=1)
+    category: str = "General"
+    amount: float = Field(ge=0)
+    date: str = ""
+    vendor: str = ""
+    payment_method: str = "Cash"
+    notes: str = ""
+
+
+class QuotationCreate(BaseModel):
+    client_name: str = Field(min_length=1)
+    client_email: str = ""
+    items: list[dict]
+    gst_percent: float = Field(ge=0, le=28, default=18)
+    valid_until: str = ""
+    notes: str = ""
+
+
 class DocumentMeta(BaseModel):
     title: str
     tags: list[str] = []
@@ -168,6 +217,17 @@ class SettingsUpdate(BaseModel):
     your_name: str | None = None
     company: str | None = None
     default_country_code: str | None = None
+    # Business profile
+    business_type: str | None = None
+    services: str | None = None
+    business_location: str | None = None
+    website: str | None = None
+    currency: str | None = None
+    # Integrations
+    team_whatsapp: str | None = None        # team/group notify number, digits only
+    whatsapp_country_code: str | None = None
+    twilio_account_sid: str | None = None
+    twilio_from_number: str | None = None
 
 
 class APIResponse(BaseModel):

@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import get_settings
 from app.core.database import close_db, connect_db
 from app.core.logging_config import logger, setup_logging
-from app.routers import analytics, auth, companies, dashboard, documents, finance, hr, leads, locations, meetings, outreach, tasks
+from app.routers import analytics, auth, companies, dashboard, documents, finance, folders, hr, leads, locations, meetings, outreach, search, tasks
 from app.routers import settings as settings_router
 
 settings = get_settings()
@@ -52,6 +52,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(leads.router)
+app.include_router(folders.router)
+app.include_router(search.router)
 app.include_router(locations.router)
 app.include_router(outreach.router)
 app.include_router(meetings.router)

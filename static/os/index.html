@@ -12,74 +12,130 @@
       theme: {
         extend: {
           colors: {
-            vision: { bg: '#0b1020', card: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.12)' }
+            ink: { DEFAULT: '#111827', soft: '#374151', mute: '#6b7280', faint: '#9ca3af' }
           }
         }
       }
     };
   </script>
   <style>
+    /* ── Light (white / black) theme ─────────────────────────────── */
+    :root {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --border-soft: #f0f1f3;
+      --ink: #111827;
+      --ink-soft: #374151;
+      --ink-mute: #6b7280;
+      --ink-faint: #9ca3af;
+    }
     body {
-      background: linear-gradient(135deg, #0b1020 0%, #1a1040 40%, #0d1b3e 70%, #12082a 100%);
+      background: var(--bg);
       min-height: 100vh;
-      color: #e2e8f0;
+      color: var(--ink);
     }
     .glass {
-      background: rgba(255, 255, 255, 0.06);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.06);
     }
     .glass-strong {
-      background: rgba(15, 23, 42, 0.65);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(129, 140, 248, 0.25);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
     }
+    .nav-item { color: var(--ink-mute); }
+    .nav-item:hover { background: #f3f4f6; color: var(--ink); }
     .nav-item.active {
-      background: linear-gradient(90deg, rgba(99, 102, 241, 0.35), rgba(168, 85, 247, 0.15));
-      border-left: 3px solid #818cf8;
-      color: #fff;
+      background: #f3f4f6;
+      border-left: 3px solid #111827;
+      color: #111827;
+      font-weight: 600;
     }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
     .input-field {
       width: 100%;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #fff;
+      border: 1px solid var(--border);
       border-radius: 0.5rem;
       padding: 0.55rem 0.75rem;
-      color: #f1f5f9;
+      color: var(--ink);
       font-size: 0.875rem;
     }
-    .input-field:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.25); }
+    .input-field::placeholder { color: var(--ink-faint); }
+    .input-field:focus { outline: none; border-color: #111827; box-shadow: 0 0 0 2px rgba(17,24,39,0.12); }
     .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      color: white;
+      background: #111827;
+      color: #fff;
       padding: 0.55rem 1rem;
       border-radius: 0.5rem;
       font-weight: 600;
       font-size: 0.875rem;
-      transition: opacity 0.2s;
+      transition: background 0.15s;
     }
-    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:hover { background: #000; }
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #e2e8f0;
+      background: #fff;
+      border: 1px solid var(--border);
+      color: var(--ink-soft);
       padding: 0.5rem 0.9rem;
       border-radius: 0.5rem;
       font-size: 0.875rem;
+      transition: background 0.15s;
     }
+    .btn-secondary:hover { background: #f9fafb; }
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .data-table th, .data-table td { padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
-    .data-table th { color: #94a3b8; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .data-table tr:hover td { background: rgba(255,255,255,0.03); }
+    .data-table th, .data-table td { padding: 0.7rem 1rem; text-align: left; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+    .data-table thead th { position: sticky; top: 0; background: #f9fafb; color: var(--ink-mute); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .data-table tbody tr { transition: background 0.12s; }
+    .data-table tbody tr:hover td { background: #f9fafb; }
+    .data-table td .btn-secondary { padding: 0.3rem 0.55rem; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    input[type="checkbox"] { accent-color: #111827; width: 0.95rem; height: 0.95rem; cursor: pointer; }
     .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
-    .badge-new { background: rgba(59,130,246,0.2); color: #93c5fd; }
-    .badge-success { background: rgba(34,197,94,0.2); color: #86efac; }
-    .badge-warn { background: rgba(234,179,8,0.2); color: #fde047; }
-    .badge-danger { background: rgba(239,68,68,0.2); color: #fca5a5; }
+    .badge-new { background: #eff6ff; color: #1d4ed8; }
+    .badge-success { background: #ecfdf5; color: #047857; }
+    .badge-warn { background: #fffbeb; color: #b45309; }
+    .badge-danger { background: #fef2f2; color: #b91c1c; }
+
+    /* ── Override leftover dark utility classes ──────────────────── */
+    .text-white { color: #111827 !important; }
+    .text-slate-200 { color: #374151 !important; }
+    .text-slate-300 { color: #4b5563 !important; }
+    .text-slate-400 { color: #6b7280 !important; }
+    .text-slate-500 { color: #9ca3af !important; }
+    .text-slate-600 { color: #cbd5e1 !important; }
+    .border-white\/10 { border-color: var(--border) !important; }
+    .border-white\/5  { border-color: var(--border-soft) !important; }
+    .bg-slate-800 { background-color: #e5e7eb !important; }
+    .bg-slate-900\/40 { background-color: #f9fafb !important; }
+    .hover\:text-white:hover { color: #111827 !important; }
+
+    /* ── Folders & chips ─────────────────────────────────────────── */
+    .folder-item { display:flex; align-items:center; gap:0.5rem; padding:0.45rem 0.6rem; border-radius:0.5rem; cursor:pointer; font-size:0.825rem; color:var(--ink-soft); transition:background 0.12s; }
+    .folder-item:hover { background:#f3f4f6; }
+    .folder-item.active { background:#111827; color:#fff; }
+    .folder-item.active .folder-count { background:rgba(255,255,255,0.2); color:#fff; }
+    .folder-count { margin-left:auto; background:#f3f4f6; color:var(--ink-mute); border-radius:9999px; padding:0 0.45rem; font-size:0.7rem; font-weight:600; }
+    .chip { display:inline-flex; align-items:center; gap:0.3rem; background:#f3f4f6; color:var(--ink-soft); border-radius:9999px; padding:0.1rem 0.55rem; font-size:0.72rem; }
+    /* Animated "working" scrape progress bar (shows activity even at 0 found) */
+    .scrape-working {
+      background-image: linear-gradient(45deg, rgba(255,255,255,0.35) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.35) 75%, transparent 75%, transparent);
+      background-size: 1rem 1rem;
+      animation: scrape-stripes 0.8s linear infinite;
+    }
+    @keyframes scrape-stripes { from { background-position: 0 0; } to { background-position: 1rem 0; } }
+    /* Leads table: fixed layout so all columns fit without horizontal scroll */
+    .leads-table { table-layout: fixed; width: 100%; }
+    .leads-table th:nth-child(1), .leads-table td:nth-child(1) { width: 34px; }
+    .leads-table th:nth-child(2), .leads-table td:nth-child(2) { width: 26%; }
+    .leads-table th:nth-child(3), .leads-table td:nth-child(3) { width: 120px; }
+    .leads-table th:nth-child(4), .leads-table td:nth-child(4) { width: auto; }
+    .leads-table th:nth-child(5), .leads-table td:nth-child(5) { width: 96px; }
+    .leads-table th:nth-child(6), .leads-table td:nth-child(6) { width: 60px; text-align: center; }
+    .leads-table th:nth-child(7), .leads-table td:nth-child(7) { width: 110px; }
+    .leads-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #loading-overlay { transition: opacity 0.2s; }
     #loading-overlay.hidden { opacity: 0; pointer-events: none; }
     .toast {
@@ -91,26 +147,27 @@
       align-items: center;
       gap: 0.5rem;
       font-size: 0.875rem;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      box-shadow: 0 4px 20px rgba(16,24,40,0.18);
     }
-    .toast.success { background: rgba(34,197,94,0.9); color: white; }
-    .toast.error { background: rgba(239,68,68,0.9); color: white; }
-    .toast.info { background: rgba(59,130,246,0.9); color: white; }
-    .toast.warning { background: rgba(234,179,8,0.9); color: #1e293b; }
+    .toast.success { background: #059669; color: white; }
+    .toast.error { background: #dc2626; color: white; }
+    .toast.info { background: #111827; color: white; }
+    .toast.warning { background: #f59e0b; color: #1e293b; }
     @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     .qr-preview-box {
       position: relative;
       width: 220px;
       height: 280px;
-      background: white;
+      background: #fff;
+      border: 1px solid var(--border);
       border-radius: 4px;
       margin: 0 auto;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 20px rgba(16,24,40,0.12);
     }
     .qr-preview-marker {
       position: absolute;
-      background: #6366f1;
-      border: 2px solid #4338ca;
+      background: #111827;
+      border: 2px solid #000;
       border-radius: 2px;
       display: flex;
       align-items: center;
@@ -118,8 +175,9 @@
       color: white;
       font-size: 0.55rem;
     }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
   </style>
 </head>
 <body class="h-full antialiased">
@@ -141,8 +199,8 @@
   <aside class="w-64 glass-strong flex-shrink-0 flex flex-col fixed h-full z-40">
     <div class="p-5 border-b border-white/10">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-          <i class="fa-solid fa-building text-white"></i>
+        <div class="w-10 h-10 rounded-xl bg-ink flex items-center justify-center">
+          <i class="fa-solid fa-building" style="color:#fff"></i>
         </div>
         <div>
           <h2 class="font-bold text-white text-sm">RecruitKr</h2>
@@ -166,6 +224,8 @@
       <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="holidays"><i class="fa-solid fa-gift w-5"></i>Holidays</a>
       <div class="pt-3 pb-1 px-3 text-xs text-slate-500 uppercase tracking-wider">Finance & Docs</div>
       <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="invoices"><i class="fa-solid fa-file-invoice-dollar w-5"></i>Invoices</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="quotations"><i class="fa-solid fa-file-signature w-5"></i>Quotations</a>
+      <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="expenses"><i class="fa-solid fa-receipt w-5"></i>Expenses</a>
       <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="documents"><i class="fa-solid fa-folder-open w-5"></i>Documents</a>
       <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="qr-generator"><i class="fa-solid fa-qrcode w-5"></i>QR Generator</a>
       <a href="#" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-300 hover:text-white transition" data-tab="analytics"><i class="fa-solid fa-chart-pie w-5"></i>Analytics</a>
@@ -175,7 +235,7 @@
     </nav>
     <div class="p-4 border-t border-white/10">
       <div class="flex items-center gap-2 mb-3">
-        <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold" id="user-avatar">A</div>
+        <div class="w-8 h-8 rounded-full bg-ink flex items-center justify-center text-xs font-bold" style="color:#fff" id="user-avatar">A</div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-white truncate" id="user-name">Admin</p>
           <p class="text-xs text-slate-400 truncate" id="user-email">admin@recruitkr.com</p>
@@ -187,13 +247,40 @@
 
   <!-- Content -->
   <main class="flex-1 ml-64 p-6 overflow-y-auto min-h-screen">
-    <header class="flex items-center justify-between mb-6">
+    <header class="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div>
         <h1 class="text-2xl font-bold text-white" id="page-title">Dashboard</h1>
         <p class="text-sm text-slate-400" id="page-subtitle">Overview & activity</p>
       </div>
-      <div class="text-sm text-slate-400" id="current-date"></div>
+      <div class="flex items-center gap-3">
+        <!-- Global Search -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input type="text" id="global-search" class="input-field pl-8 w-64" placeholder="Search everything…" autocomplete="off" />
+          <div id="global-search-results" class="hidden absolute z-50 mt-1 w-80 right-0 glass rounded-xl p-2 max-h-96 overflow-y-auto"></div>
+        </div>
+        <button id="quick-add-btn" class="btn-primary whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>Quick Add</button>
+        <div class="text-xs text-slate-400 hidden lg:block" id="current-date"></div>
+      </div>
     </header>
+
+    <!-- Quick Add menu -->
+    <div id="quick-add-menu" class="hidden fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-24">
+      <div class="glass rounded-xl p-4 w-full max-w-sm">
+        <h3 class="font-semibold text-white mb-3">Quick Add</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <button class="btn-secondary text-left quick-add-item" data-tab="leads"><i class="fa-solid fa-user-plus mr-2"></i>Lead</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="companies"><i class="fa-solid fa-building mr-2"></i>Company</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="tasks"><i class="fa-solid fa-list-check mr-2"></i>Task</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="meetings"><i class="fa-solid fa-calendar-check mr-2"></i>Meeting</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="invoices"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Invoice</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="expenses"><i class="fa-solid fa-receipt mr-2"></i>Expense</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="quotations"><i class="fa-solid fa-file-signature mr-2"></i>Quotation</button>
+          <button class="btn-secondary text-left quick-add-item" data-tab="employees"><i class="fa-solid fa-id-badge mr-2"></i>Employee</button>
+        </div>
+        <button id="quick-add-close" class="btn-secondary w-full mt-3">Close</button>
+      </div>
+    </div>
 
     <!-- Dashboard -->
     <section id="tab-dashboard" class="tab-panel active space-y-6">
@@ -205,48 +292,86 @@
           <p class="text-slate-400 text-xs">Stats may be incomplete. Ensure MongoDB is running.</p>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="dash-stats">
-        <div class="glass rounded-xl p-5">
-          <p class="text-slate-400 text-xs uppercase tracking-wider">Total Leads</p>
-          <p class="text-3xl font-bold text-white mt-1" id="stat-leads"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+      <!-- Primary KPIs -->
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between"><p class="text-slate-400 text-xs uppercase tracking-wider">Total Leads</p><i class="fa-solid fa-users text-slate-300"></i></div>
+          <p class="text-2xl font-bold text-white mt-1" id="stat-leads">—</p>
         </div>
-        <div class="glass rounded-xl p-5">
-          <p class="text-slate-400 text-xs uppercase tracking-wider">Contacted</p>
-          <p class="text-3xl font-bold text-emerald-400 mt-1" id="stat-contacted"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between"><p class="text-slate-400 text-xs uppercase tracking-wider">New / 7 days</p><i class="fa-solid fa-arrow-trend-up text-slate-300"></i></div>
+          <p class="text-2xl font-bold text-white mt-1" id="stat-new-week">—</p>
         </div>
-        <div class="glass rounded-xl p-5">
-          <p class="text-slate-400 text-xs uppercase tracking-wider">Meetings</p>
-          <p class="text-3xl font-bold text-blue-400 mt-1" id="stat-meetings"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between"><p class="text-slate-400 text-xs uppercase tracking-wider">Conversion</p><i class="fa-solid fa-bullseye text-slate-300"></i></div>
+          <p class="text-2xl font-bold text-white mt-1" id="stat-conversion">—</p>
         </div>
-        <div class="glass rounded-xl p-5">
-          <p class="text-slate-400 text-xs uppercase tracking-wider">Employees</p>
-          <p class="text-3xl font-bold text-purple-400 mt-1" id="stat-employees"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between"><p class="text-slate-400 text-xs uppercase tracking-wider">Clients</p><i class="fa-solid fa-handshake text-slate-300"></i></div>
+          <p class="text-2xl font-bold text-white mt-1" id="stat-clients">—</p>
         </div>
-        <div class="glass rounded-xl p-5">
-          <p class="text-slate-400 text-xs uppercase tracking-wider">Payroll Total</p>
-          <p class="text-3xl font-bold text-amber-400 mt-1" id="stat-payroll"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between"><p class="text-slate-400 text-xs uppercase tracking-wider">Meetings</p><i class="fa-solid fa-calendar-check text-slate-300"></i></div>
+          <p class="text-2xl font-bold text-white mt-1" id="stat-meetings">—</p>
         </div>
-        <div class="glass rounded-xl p-5">
-          <p class="text-slate-400 text-xs uppercase tracking-wider">Revenue</p>
-          <p class="text-3xl font-bold text-cyan-400 mt-1" id="stat-revenue"><i class="fa-solid fa-circle-notch fa-spin text-slate-600 text-xl"></i></p>
+        <div class="glass rounded-xl p-4">
+          <div class="flex items-center justify-between"><p class="text-slate-400 text-xs uppercase tracking-wider">Open Tasks</p><i class="fa-solid fa-list-check text-slate-300"></i></div>
+          <p class="text-2xl font-bold text-white mt-1" id="stat-tasks">—</p>
         </div>
       </div>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-chart-bar mr-2 text-indigo-400"></i>Lead Pipeline</h3>
-          <canvas id="dash-chart-leads" height="200"></canvas>
+
+      <!-- Finance strip -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass rounded-xl p-4">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Revenue (Invoiced)</p>
+          <p class="text-xl font-bold text-emerald-600 mt-1" id="stat-revenue">—</p>
         </div>
-        <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-clock-rotate-left mr-2 text-indigo-400"></i>Recent Activity</h3>
+        <div class="glass rounded-xl p-4">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Expenses</p>
+          <p class="text-xl font-bold text-rose-600 mt-1" id="stat-expenses">—</p>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Net</p>
+          <p class="text-xl font-bold text-white mt-1" id="stat-net">—</p>
+        </div>
+        <div class="glass rounded-xl p-4">
+          <p class="text-slate-400 text-xs uppercase tracking-wider">Payroll Total</p>
+          <p class="text-xl font-bold text-white mt-1" id="stat-payroll">—</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass rounded-xl p-5 lg:col-span-1">
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-chart-bar mr-2"></i>Lead Pipeline</h3>
+          <canvas id="dash-chart-leads" height="220"></canvas>
+        </div>
+        <div class="glass rounded-xl p-5 lg:col-span-1">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-white"><i class="fa-solid fa-bell mr-2"></i>Follow-ups Due</h3>
+            <span class="badge badge-warn" id="dash-followup-count">0</span>
+          </div>
+          <div id="dash-followups" class="space-y-2 max-h-64 overflow-y-auto text-sm"></div>
+        </div>
+        <div class="glass rounded-xl p-5 lg:col-span-1">
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Recent Activity</h3>
           <div id="dash-activities" class="space-y-2 max-h-64 overflow-y-auto text-sm text-slate-300"></div>
         </div>
+      </div>
+
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-user-clock mr-2"></i>Recently Added Leads</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Added</th></tr></thead><tbody id="dash-recent-leads"></tbody></table></div>
       </div>
     </section>
 
     <!-- Leads -->
     <section id="tab-leads" class="tab-panel space-y-6">
-      <div class="glass rounded-xl p-5">
-        <h3 class="font-semibold text-white mb-4">Scrape New Leads</h3>
+      <div class="glass rounded-xl p-4">
+        <button type="button" id="scrape-toggle" class="w-full flex items-center justify-between text-left">
+          <span class="font-semibold text-white"><i class="fa-solid fa-spider mr-2"></i>Scrape New Leads</span>
+          <i class="fa-solid fa-chevron-down text-slate-400 text-sm transition-transform" id="scrape-chevron"></i>
+        </button>
+        <div id="scrape-collapse" class="hidden mt-4">
         <form id="scrape-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label for="scrape-business" class="block text-xs text-slate-400 mb-1">Business Type</label>
@@ -267,9 +392,15 @@
             </select>
             <button type="submit" class="btn-primary whitespace-nowrap"><i class="fa-solid fa-spider mr-1"></i>Scrape</button>
           </div>
-          <label class="flex items-center gap-2 text-sm text-slate-300 col-span-full">
-            <input type="checkbox" id="scrape-no-website" class="rounded" /> No website only
-          </label>
+          <div class="col-span-full grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+            <div>
+              <label for="scrape-folder" class="block text-xs text-slate-400 mb-1"><i class="fa-solid fa-folder mr-1"></i>Save results into folder</label>
+              <select id="scrape-folder" class="input-field"><option value="">— No folder (Unfiled) —</option></select>
+            </div>
+            <label class="flex items-center gap-2 text-sm text-slate-300 md:mt-5">
+              <input type="checkbox" id="scrape-no-website" class="rounded" /> No website only
+            </label>
+          </div>
         </form>
         <div id="scrape-status" class="mt-4 hidden">
           <div class="flex items-center gap-3 text-sm">
@@ -277,36 +408,79 @@
             <span id="scrape-progress-text">0 / 0 found</span>
           </div>
           <div class="mt-2 h-2 bg-slate-800 rounded-full overflow-hidden">
-            <div id="scrape-progress-bar" class="h-full bg-indigo-500 transition-all" style="width:0%"></div>
+            <div id="scrape-progress-bar" class="h-full bg-ink transition-all" style="width:0%"></div>
           </div>
           <button id="scrape-save-btn" class="btn-primary mt-3 hidden"><i class="fa-solid fa-database mr-1"></i>Save to Database</button>
         </div>
+        </div>
       </div>
-      <div class="glass rounded-xl p-5">
-        <div class="flex flex-wrap gap-3 mb-4">
-          <input type="text" id="lead-filter-q" class="input-field max-w-xs" placeholder="Search leads…" />
-          <select id="lead-filter-status" class="input-field max-w-[160px]">
-            <option value="">All Status</option>
-            <option>New</option><option>Contacted</option><option>Interested</option>
-            <option>Meeting Scheduled</option><option>Client</option><option>Rejected</option>
-          </select>
-          <input type="text" id="lead-filter-city" class="input-field max-w-[140px]" placeholder="City" />
-          <button id="lead-filter-btn" class="btn-primary"><i class="fa-solid fa-filter mr-1"></i>Filter</button>
-          <button id="lead-add-btn" class="btn-secondary"><i class="fa-solid fa-plus mr-1"></i>Add Lead</button>
+      <div class="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-5">
+        <!-- Folder panel -->
+        <div class="glass rounded-xl p-4 h-fit">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-white text-sm"><i class="fa-solid fa-folder-tree mr-2"></i>Folders</h3>
+            <button id="folder-add-btn" class="btn-secondary text-xs px-2 py-1" title="New folder"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <div id="folders-list" class="space-y-1"></div>
         </div>
-        <div class="overflow-x-auto">
-          <table class="data-table"><thead><tr>
-            <th>Name</th><th>Phone</th><th>City</th><th>Area</th><th>Status</th><th>Rating</th><th>Actions</th>
-          </tr></thead><tbody id="leads-tbody"></tbody></table>
-        </div>
-        <div class="flex justify-between items-center mt-4 text-sm text-slate-400">
-          <span id="leads-count">0 leads</span>
-          <div class="flex gap-2">
-            <button id="leads-prev" class="btn-secondary text-xs">Prev</button>
-            <button id="leads-next" class="btn-secondary text-xs">Next</button>
+
+        <!-- Leads table -->
+        <div class="glass rounded-xl p-5">
+          <div class="flex flex-wrap items-center gap-2 mb-3">
+            <input type="text" id="lead-filter-q" class="input-field max-w-[200px]" placeholder="Search leads…" />
+            <select id="lead-filter-status" class="input-field max-w-[150px]">
+              <option value="">All Status</option>
+              <option>New</option><option>Contacted</option><option>Interested</option>
+              <option>Meeting Scheduled</option><option>Client</option><option>Rejected</option>
+            </select>
+            <input type="text" id="lead-filter-city" class="input-field max-w-[120px]" placeholder="City" />
+            <select id="lead-filter-phone" class="input-field max-w-[130px]">
+              <option value="">Phone: any</option><option value="true">Has phone</option><option value="false">No phone</option>
+            </select>
+            <select id="lead-filter-website" class="input-field max-w-[140px]">
+              <option value="">Website: any</option><option value="false">No website</option><option value="true">Has website</option>
+            </select>
+            <select id="lead-filter-rating" class="input-field max-w-[120px]">
+              <option value="">Rating: any</option><option value="4">4★ +</option><option value="4.5">4.5★ +</option><option value="3">3★ +</option>
+            </select>
+            <label class="flex items-center gap-1.5 text-sm text-slate-300 whitespace-nowrap"><input type="checkbox" id="lead-filter-followup" /> Follow-up due</label>
+            <button id="lead-filter-btn" class="btn-primary"><i class="fa-solid fa-filter mr-1"></i>Filter</button>
+            <button id="lead-filter-reset" class="btn-secondary" title="Reset filters"><i class="fa-solid fa-rotate-left"></i></button>
+            <span class="flex-1"></span>
+            <button id="lead-add-btn" class="btn-secondary"><i class="fa-solid fa-plus mr-1"></i>Add Lead</button>
+            <button id="lead-export-btn" class="btn-secondary"><i class="fa-solid fa-file-csv mr-1"></i>Export</button>
+          </div>
+
+          <!-- Bulk action bar -->
+          <div id="leads-bulk-bar" class="hidden items-center flex-wrap gap-2 mb-3 p-2.5 rounded-lg bg-slate-900/40 border border-white/10 text-sm">
+            <span class="text-slate-300"><i class="fa-solid fa-square-check mr-1"></i><span id="leads-selected-count">0</span> selected</span>
+            <select id="bulk-status-select" class="input-field max-w-[170px] text-xs">
+              <option value="">Set status…</option>
+              <option>New</option><option>Contacted</option><option>Interested</option>
+              <option>Meeting Scheduled</option><option>Client</option><option>Rejected</option>
+            </select>
+            <select id="bulk-folder-select" class="input-field max-w-[170px] text-xs"><option value="">Move to folder…</option></select>
+            <button id="leads-to-outreach" class="btn-secondary text-xs"><i class="fa-solid fa-paper-plane mr-1"></i>Outreach</button>
+            <button id="bulk-delete-btn" class="btn-secondary text-xs"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
+            <button id="leads-clear-sel" class="btn-secondary text-xs">Clear</button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="data-table leads-table"><thead><tr>
+              <th class="w-8"><input type="checkbox" id="leads-select-all" title="Select all on page" /></th>
+              <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>★</th><th>Actions</th>
+            </tr></thead><tbody id="leads-tbody"></tbody></table>
+          </div>
+          <div class="flex flex-wrap justify-between items-center gap-3 mt-4 text-sm text-slate-400">
+            <span id="leads-count">0 leads</span>
+            <div class="flex gap-2">
+              <button id="leads-prev" class="btn-secondary text-xs">Prev</button>
+              <button id="leads-next" class="btn-secondary text-xs">Next</button>
+            </div>
           </div>
         </div>
       </div>
+
       <!-- Add Lead Modal -->
       <div id="lead-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
         <div class="glass rounded-xl p-6 w-full max-w-lg">
@@ -318,11 +492,68 @@
               <div><label class="block text-xs text-slate-400 mb-1">City</label><input name="city" class="input-field" /></div>
             </div>
             <div><label class="block text-xs text-slate-400 mb-1">Address</label><input name="address" class="input-field" /></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs text-slate-400 mb-1">Folder</label><select name="folder_id" id="lead-form-folder" class="input-field"><option value="">— None —</option></select></div>
+              <div><label class="block text-xs text-slate-400 mb-1">Follow-up date</label><input name="follow_up_date" type="date" class="input-field" /></div>
+            </div>
             <div class="flex gap-2 justify-end mt-4">
               <button type="button" id="lead-modal-close" class="btn-secondary">Cancel</button>
               <button type="submit" class="btn-primary">Save</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Folder Modal -->
+      <div id="folder-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div class="glass rounded-xl p-6 w-full max-w-sm">
+          <h3 class="text-lg font-bold text-white mb-4">New Folder</h3>
+          <form id="folder-form" class="space-y-3">
+            <div><label class="block text-xs text-slate-400 mb-1">Name</label><input name="name" class="input-field" required minlength="1" placeholder="Hot Leads" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Description</label><input name="description" class="input-field" placeholder="Optional" /></div>
+            <div class="flex gap-2 justify-end mt-4">
+              <button type="button" id="folder-modal-close" class="btn-secondary">Cancel</button>
+              <button type="submit" class="btn-primary">Create</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Lead Detail / Timeline Modal -->
+      <div id="lead-detail-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <div class="glass rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-bold text-white" id="ld-name">Lead</h3>
+              <p class="text-xs text-slate-400" id="ld-sub"></p>
+            </div>
+            <button id="lead-detail-close" class="btn-secondary text-xs"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+            <div><label class="block text-xs text-slate-400 mb-1">Status</label>
+              <select id="ld-status" class="input-field">
+                <option>New</option><option>Contacted</option><option>Interested</option>
+                <option>Meeting Scheduled</option><option>Client</option><option>Rejected</option>
+              </select>
+            </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Follow-up date</label><input id="ld-followup" type="date" class="input-field" /></div>
+          </div>
+          <div class="flex gap-2 mb-5">
+            <button id="ld-save" class="btn-primary text-sm"><i class="fa-solid fa-floppy-disk mr-1"></i>Save changes</button>
+            <a id="ld-whatsapp" target="_blank" class="btn-secondary text-sm"><i class="fa-brands fa-whatsapp mr-1"></i>WhatsApp</a>
+          </div>
+          <div class="border-t border-white/10 pt-4">
+            <h4 class="font-semibold text-white text-sm mb-2"><i class="fa-solid fa-timeline mr-2"></i>Activity Timeline</h4>
+            <div class="flex gap-2 mb-3">
+              <select id="ld-note-kind" class="input-field max-w-[120px] text-xs">
+                <option value="note">Note</option><option value="call">Call</option>
+                <option value="email">Email</option><option value="whatsapp">WhatsApp</option><option value="meeting">Meeting</option>
+              </select>
+              <input id="ld-note-text" class="input-field text-sm" placeholder="Add a note or log a call…" />
+              <button id="ld-note-add" class="btn-primary text-sm whitespace-nowrap">Add</button>
+            </div>
+            <div id="ld-timeline" class="space-y-2 max-h-60 overflow-y-auto text-sm"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -385,19 +616,45 @@
             <div><label class="block text-xs text-slate-400 mb-1">Channel</label>
               <select id="tpl-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="email">Email</option></select>
             </div>
-            <div><label class="block text-xs text-slate-400 mb-1">Body</label><textarea id="tpl-body" class="input-field h-24" required minlength="5" placeholder="Hi {name}, …"></textarea></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Body</label><textarea id="tpl-body" class="input-field h-24" required minlength="5" placeholder="Hi {name}, …"></textarea>
+              <p class="text-xs text-slate-500 mt-1">Variables: {name} {phone} {city} {address} {company} {your_name} {rating}</p>
+            </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Image URL <span class="text-slate-500">(optional — added as a link)</span></label><input id="tpl-image" class="input-field" placeholder="https://…/flyer.jpg" /></div>
             <div class="flex gap-2"><button type="submit" class="btn-primary">Save Template</button><button type="button" id="tpl-reset" class="btn-secondary">Reset</button></div>
           </form>
           <div id="templates-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
         </div>
         <div class="glass rounded-xl p-5">
           <h3 class="font-semibold text-white mb-4">Create Campaign</h3>
-          <form id="campaign-form" class="space-y-3">
+          <form id="campaign-form" class="space-y-4">
             <div><label class="block text-xs text-slate-400 mb-1">Template</label><select id="campaign-template" class="input-field" required></select></div>
-            <div><label class="block text-xs text-slate-400 mb-1">Lead IDs (comma-separated)</label><input id="campaign-leads" class="input-field" required placeholder="id1, id2" /></div>
-            <div><label class="block text-xs text-slate-400 mb-1">Channel</label><select id="campaign-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select></div>
-            <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="campaign-mark" checked /> Mark as contacted</label>
-            <button type="submit" class="btn-primary"><i class="fa-solid fa-rocket mr-1"></i>Launch Campaign</button>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs text-slate-400">Recipients</label>
+                <span class="text-xs text-indigo-300"><span id="campaign-recipient-count">0</span> selected</span>
+              </div>
+              <div class="flex gap-2 mb-2">
+                <input id="campaign-lead-search" class="input-field" placeholder="Search leads to add…" />
+                <button type="button" id="campaign-clear-recipients" class="btn-secondary text-xs whitespace-nowrap">Clear</button>
+              </div>
+              <div id="campaign-lead-results" class="hidden space-y-1 max-h-40 overflow-y-auto mb-2 border border-white/10 rounded-lg p-2"></div>
+              <div id="campaign-recipients" class="flex flex-wrap gap-1.5 min-h-[2.25rem] p-2 rounded-lg bg-slate-900/40 border border-white/10">
+                <span class="text-xs text-slate-500" id="campaign-recipients-empty">No recipients yet — select leads in the Leads tab or search above.</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs text-slate-400 mb-1">Channel</label><select id="campaign-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select></div>
+              <label class="flex items-end gap-2 text-sm pb-2"><input type="checkbox" id="campaign-mark" checked /> Mark as contacted</label>
+            </div>
+
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Message preview <span class="text-slate-600">(first recipient)</span></label>
+              <div id="campaign-preview" class="text-sm text-slate-200 whitespace-pre-wrap bg-slate-900/40 border border-white/10 rounded-lg p-3 min-h-[3rem]">Select a template and recipient to preview.</div>
+            </div>
+
+            <button type="submit" class="btn-primary w-full"><i class="fa-solid fa-rocket mr-1"></i>Launch Campaign</button>
           </form>
           <div id="campaign-result" class="mt-4 hidden"></div>
         </div>
@@ -423,7 +680,7 @@
       </div>
       <div class="glass rounded-xl p-5">
         <h3 class="font-semibold text-white mb-4">All Meetings</h3>
-        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Title</th><th>Scheduled</th><th>Status</th><th>Notes</th></tr></thead><tbody id="meetings-tbody"></tbody></table></div>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Title</th><th>Scheduled</th><th>Status</th><th>Notes</th><th>Notify</th></tr></thead><tbody id="meetings-tbody"></tbody></table></div>
       </div>
     </section>
 
@@ -582,6 +839,76 @@
       </div>
     </section>
 
+    <!-- Quotations -->
+    <section id="tab-quotations" class="tab-panel space-y-6">
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Create Quotation</h3>
+        <form id="quotation-form" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div><label class="block text-xs text-slate-400 mb-1">Client Name</label><input name="client_name" class="input-field" required minlength="1" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Client Email</label><input name="client_email" type="email" class="input-field" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">GST %</label><input name="gst_percent" type="number" min="0" max="28" class="input-field" value="18" required /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Valid Until</label><input name="valid_until" type="date" class="input-field" /></div>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-2">Line Items</label>
+            <div id="quote-items" class="space-y-2">
+              <div class="quote-item grid grid-cols-4 gap-2">
+                <input name="description" class="input-field" placeholder="Description" required />
+                <input name="qty" type="number" min="1" class="input-field" value="1" required />
+                <input name="price" type="number" min="0" step="0.01" class="input-field" placeholder="Price" required />
+                <button type="button" class="btn-secondary remove-quote-item text-xs">Remove</button>
+              </div>
+            </div>
+            <button type="button" id="quote-add-item" class="btn-secondary mt-2 text-xs"><i class="fa-solid fa-plus mr-1"></i>Add Item</button>
+          </div>
+          <button type="submit" class="btn-primary">Create Quotation</button>
+        </form>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <h3 class="font-semibold text-white mb-4">Quotations</h3>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Quote #</th><th>Client</th><th>Total</th><th>Valid Until</th><th>Status</th><th>PDF</th></tr></thead><tbody id="quotations-tbody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Expenses -->
+    <section id="tab-expenses" class="tab-panel space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass rounded-xl p-5 lg:col-span-2">
+          <h3 class="font-semibold text-white mb-4">Record Expense</h3>
+          <form id="expense-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div><label class="block text-xs text-slate-400 mb-1">Title</label><input name="title" class="input-field" required minlength="1" placeholder="Office rent" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Amount</label><input name="amount" type="number" min="0" step="0.01" class="input-field" required /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Category</label>
+              <select name="category" class="input-field">
+                <option>General</option><option>Rent</option><option>Salaries</option><option>Marketing</option>
+                <option>Travel</option><option>Software</option><option>Utilities</option><option>Equipment</option><option>Other</option>
+              </select>
+            </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Date</label><input name="date" type="date" class="input-field" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Vendor</label><input name="vendor" class="input-field" placeholder="Optional" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Payment Method</label>
+              <select name="payment_method" class="input-field"><option>Cash</option><option>Bank Transfer</option><option>Card</option><option>UPI</option><option>Cheque</option></select>
+            </div>
+            <div class="md:col-span-2 lg:col-span-3"><label class="block text-xs text-slate-400 mb-1">Notes</label><input name="notes" class="input-field" /></div>
+            <div><button type="submit" class="btn-primary"><i class="fa-solid fa-plus mr-1"></i>Add Expense</button></div>
+          </form>
+        </div>
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4">By Category</h3>
+          <canvas id="expense-chart" height="180"></canvas>
+          <p class="text-sm text-slate-400 mt-4">Total: <span class="font-bold text-white" id="expense-total">₹0</span></p>
+        </div>
+      </div>
+      <div class="glass rounded-xl p-5">
+        <div class="flex gap-3 mb-4">
+          <input type="text" id="expense-filter-month" class="input-field max-w-[160px]" placeholder="YYYY-MM filter" />
+          <button id="expense-load-btn" class="btn-primary">Filter</button>
+        </div>
+        <div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Date</th><th>Title</th><th>Category</th><th>Vendor</th><th>Method</th><th>Amount</th><th>Action</th></tr></thead><tbody id="expenses-tbody"></tbody></table></div>
+      </div>
+    </section>
+
     <!-- Documents -->
     <section id="tab-documents" class="tab-panel space-y-6">
       <div class="glass rounded-xl p-5">
@@ -626,9 +953,10 @@
         <div class="glass rounded-xl p-5">
           <h3 class="font-semibold text-white mb-4 text-center">Position Preview</h3>
           <div class="qr-preview-box" id="qr-preview-box">
+            <div id="qr-doc-lines" class="absolute inset-0 p-3 flex flex-col gap-1.5 pointer-events-none"></div>
             <div class="qr-preview-marker" id="qr-preview-marker"><i class="fa-solid fa-qrcode"></i></div>
           </div>
-          <p class="text-xs text-slate-400 text-center mt-3">Preview shows approximate QR placement</p>
+          <p class="text-xs text-slate-500 text-center mt-3" id="qr-doc-name">No document selected — choose a PDF on the left</p>
         </div>
       </div>
       <div class="glass rounded-xl p-5">
@@ -668,21 +996,34 @@
 
     <!-- Analytics -->
     <section id="tab-analytics" class="tab-panel space-y-6">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <p class="text-sm text-slate-400">Business intelligence across leads, meetings, finance and payroll.</p>
+        <button id="analytics-refresh" class="btn-secondary text-sm"><i class="fa-solid fa-rotate-right mr-1"></i>Refresh</button>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="analytics-kpis">
+        <div class="glass rounded-xl p-4"><p class="text-slate-400 text-xs uppercase tracking-wider">Total Leads</p><p class="text-2xl font-bold text-white mt-1" id="an-leads">—</p></div>
+        <div class="glass rounded-xl p-4"><p class="text-slate-400 text-xs uppercase tracking-wider">Conversion</p><p class="text-2xl font-bold text-white mt-1" id="an-conv">—</p></div>
+        <div class="glass rounded-xl p-4"><p class="text-slate-400 text-xs uppercase tracking-wider">Revenue</p><p class="text-2xl font-bold text-emerald-600 mt-1" id="an-rev">—</p></div>
+        <div class="glass rounded-xl p-4"><p class="text-slate-400 text-xs uppercase tracking-wider">Expenses</p><p class="text-2xl font-bold text-rose-600 mt-1" id="an-exp">—</p></div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4">Leads by Status</h3>
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-chart-pie mr-2"></i>Leads by Status</h3>
           <canvas id="chart-leads-status" height="220"></canvas>
         </div>
         <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4">Meetings by Status</h3>
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-calendar-check mr-2"></i>Meetings by Status</h3>
           <canvas id="chart-meetings-status" height="220"></canvas>
         </div>
         <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4">Payroll by Month</h3>
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-money-bill-trend-up mr-2"></i>Payroll by Month</h3>
           <canvas id="chart-payroll" height="220"></canvas>
         </div>
         <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4">Revenue by Month</h3>
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-file-invoice-dollar mr-2"></i>Revenue by Month</h3>
           <canvas id="chart-revenue" height="220"></canvas>
         </div>
       </div>
@@ -716,17 +1057,78 @@
 
     <!-- Settings -->
     <section id="tab-settings" class="tab-panel space-y-6">
-      <div class="glass rounded-xl p-5">
-        <h3 class="font-semibold text-white mb-4">App Settings</h3>
-        <form id="settings-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><label class="block text-xs text-slate-400 mb-1">Your Name</label><input name="your_name" class="input-field" placeholder="RecruitKr Admin" /></div>
-          <div><label class="block text-xs text-slate-400 mb-1">Company Name</label><input name="company" class="input-field" placeholder="RecruitKr" /></div>
-          <div><label class="block text-xs text-slate-400 mb-1">Default Country Code</label><input name="default_country_code" class="input-field" placeholder="+91" /></div>
-          <div class="md:col-span-2 flex gap-2 mt-2">
-            <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Settings</button>
+      <form id="settings-form" class="space-y-6">
+        <!-- Business profile -->
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-1"><i class="fa-solid fa-briefcase mr-2"></i>Business Profile</h3>
+          <p class="text-xs text-slate-400 mb-4">This describes your business. It is used in message templates ({company}, {your_name}) and across the app.</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label class="block text-xs text-slate-400 mb-1">Your Name</label><input name="your_name" class="input-field" placeholder="Ajay" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Company Name</label><input name="company" class="input-field" placeholder="RecruitKr" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">What business do you do?</label><input name="business_type" class="input-field" placeholder="Recruitment & staffing agency" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Where do you operate?</label><input name="business_location" class="input-field" placeholder="Jaipur, Rajasthan" /></div>
+            <div class="md:col-span-2"><label class="block text-xs text-slate-400 mb-1">Services you offer</label><input name="services" class="input-field" placeholder="Placement, HR outsourcing, payroll…" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Website</label><input name="website" class="input-field" placeholder="https://recruitkr.com" /></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Currency Symbol</label><input name="currency" class="input-field" placeholder="₹" /></div>
           </div>
-        </form>
-      </div>
+        </div>
+
+        <!-- Integrations / APIs -->
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-1"><i class="fa-solid fa-plug mr-2"></i>Integrations &amp; APIs</h3>
+          <p class="text-xs text-slate-400 mb-4">These are the external services this app uses, what they do, and where. Edit the settings here directly.</p>
+
+          <div class="space-y-3">
+            <!-- WhatsApp -->
+            <div class="border border-white/10 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2"><i class="fa-brands fa-whatsapp text-emerald-600"></i><span class="font-medium text-white text-sm">WhatsApp (Click-to-chat)</span></div>
+                <span class="badge badge-success">No API key needed</span>
+              </div>
+              <p class="text-xs text-slate-400 mb-3"><b>What:</b> Opens WhatsApp with a pre-filled message. <b>Where:</b> Outreach campaigns, Meetings (notify team), Tasks (assign/notify). Free, uses wa.me links.</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div><label class="block text-xs text-slate-400 mb-1">Default country code (digits)</label><input name="whatsapp_country_code" class="input-field" placeholder="91" /></div>
+                <div><label class="block text-xs text-slate-400 mb-1">Team WhatsApp number (for meeting/task alerts)</label><input name="team_whatsapp" class="input-field" placeholder="9198xxxxxxx" /></div>
+              </div>
+            </div>
+
+            <!-- Nominatim -->
+            <div class="border border-white/10 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2"><i class="fa-solid fa-map-location-dot text-blue-600"></i><span class="font-medium text-white text-sm">OpenStreetMap Nominatim</span></div>
+                <span class="badge badge-success">No API key needed</span>
+              </div>
+              <p class="text-xs text-slate-400"><b>What:</b> Looks up cities &amp; areas worldwide. <b>Where:</b> Area API tab and lead scraping by area. Public, free.</p>
+            </div>
+
+            <!-- Google Maps scraper -->
+            <div class="border border-white/10 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2"><i class="fa-solid fa-spider text-slate-700"></i><span class="font-medium text-white text-sm">Google Maps Scraper (Playwright)</span></div>
+                <span class="badge badge-success">No API key needed</span>
+              </div>
+              <p class="text-xs text-slate-400"><b>What:</b> Collects business leads from Google Maps. <b>Where:</b> Leads → Scrape New Leads. Runs locally in a headless browser.</p>
+            </div>
+
+            <!-- Twilio (optional) -->
+            <div class="border border-white/10 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2"><i class="fa-solid fa-comment-sms text-rose-600"></i><span class="font-medium text-white text-sm">Twilio SMS (optional)</span></div>
+                <span class="badge badge-warn" id="twilio-status">Optional</span>
+              </div>
+              <p class="text-xs text-slate-400 mb-3"><b>What:</b> Sends automated SMS. <b>Where:</b> Outreach when channel = SMS. Needs a paid Twilio account. Leave blank to use WhatsApp instead.</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div><label class="block text-xs text-slate-400 mb-1">Twilio Account SID</label><input name="twilio_account_sid" class="input-field" placeholder="AC…" /></div>
+                <div><label class="block text-xs text-slate-400 mb-1">Twilio From Number</label><input name="twilio_from_number" class="input-field" placeholder="+1…" /></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Settings</button>
+        </div>
+      </form>
     </section>
 
   </main>

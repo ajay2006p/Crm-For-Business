@@ -852,6 +852,19 @@ def run_scraper(job_id: str, search_list: list[str], total: int,
     if not search_list:
         return []
 
+    # Playwright's sync API spawns a browser subprocess, which on Windows needs a
+    # Proactor event loop. When the scraper runs in a worker thread under the ASGI
+    # server the thread can inherit a Selector loop policy, causing the browser
+    # transport to fail with NotImplementedError. Force a Proactor loop here.
+    import sys
+    import asyncio
+    if sys.platform == "win32":
+        try:
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+            asyncio.set_event_loop(asyncio.new_event_loop())
+        except Exception:
+            pass
+
     if not _PLAYWRIGHT_AVAILABLE:
         if job_id in JOB_STATES:
             JOB_STATES[job_id]["status"] = "error"

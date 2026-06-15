@@ -83,6 +83,8 @@ async def create_campaign(body: CampaignCreate, user=Depends(get_current_user)):
     messages = []
     for lead in leads:
         msg = render_message(tpl["body"], lead, settings_data)
+        if tpl.get("image_url"):
+            msg = f"{msg}\n\n📷 {tpl['image_url']}"
         entry = {
             "name": lead.get("name"),
             "phone": lead.get("phone_number"),
@@ -122,4 +124,7 @@ async def preview(body: dict, user=Depends(get_current_user)):
     lead = body.get("lead", {})
     if not tpl_body:
         raise HTTPException(status_code=400, detail="Template body required")
-    return {"status": "success", "message": render_message(tpl_body, lead, get_settings())}
+    msg = render_message(tpl_body, lead, get_settings())
+    if body.get("image_url"):
+        msg = f"{msg}\n\n📷 {body['image_url']}"
+    return {"status": "success", "message": msg}

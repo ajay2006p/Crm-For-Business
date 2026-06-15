@@ -1,12 +1,18 @@
+import csv
+import io
+import os
 import threading
 import uuid
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.schemas import LeadCreate, LeadFilter, LeadUpdate, ScrapeRequest
+from app.models.schemas import (
+    LeadBulkAction, LeadCreate, LeadFilter, LeadNote, LeadUpdate, ScrapeRequest,
+)
 from app.services.activity_service import log_activity
 from app.utils.helpers import parse_object_id, serialize_doc, serialize_many, utcnow
 from scraper_logic import JOB_STATES, run_scraper
@@ -18,9 +24,7 @@ def _lead_key(lead: dict) -> str:
     return f"{lead.get('name','').lower()}|{lead.get('phone_number','')}|{lead.get('address','').lower()}"
 
 
-@router.get("")
-async def list_leads(f: LeadFilter = Depends(), user=Depends(get_current_user)):
-    db = get_db()
+def _build_lead_query(f: LeadFilter) -> dict:
     query: dict = {}
     if f.status:
         query["status"] = f.status
@@ -28,6 +32,10 @@ async def list_leads(f: LeadFilter = Depends(), user=Depends(get_current_user)):
         query["city"] = {"$regex": f.city, "$options": "i"}
     if f.area:
         query["area"] = {"$regex": f.area, "$options": "i"}
+    if f.folder_id == "unfiled":
+        query["folder_id"] = {"$in": [None, ""]}
+    elif f.folder_id:
+        query["folder_id"] = f.folder_id
     if f.has_phone is True:
         query["phone_number"] = {"$nin": ["", None]}
     if f.has_phone is False:
@@ -38,6 +46,8 @@ async def list_leads(f: LeadFilter = Depends(), user=Depends(get_current_user)):
         query["website"] = {"$in": ["", None]}
     if f.min_rating is not None:
         query["reviews_average"] = {"$gte": f.min_rating}
+    if f.due_followup is True:
+        query["follow_up_date"] = {"$nin": ["", None], "$lte": utcnow().date().isoformat()}
     if f.q:
         query["$or"] = [
             {"name": {"$regex": f.q, "$options": "i"}},
@@ -45,10 +55,39 @@ async def list_leads(f: LeadFilter = Depends(), user=Depends(get_current_user)):
             {"address": {"$regex": f.q, "$options": "i"}},
             {"city": {"$regex": f.q, "$options": "i"}},
         ]
+    return query
+
+
+@router.get("")
+async def list_leads(f: LeadFilter = Depends(), user=Depends(get_current_user)):
+    db = get_db()
+    query = _build_lead_query(f)
     skip = (f.page - 1) * f.limit
     total = await db.leads.count_documents(query)
     docs = await db.leads.find(query).sort("created_at", -1).skip(skip).limit(f.limit).to_list(f.limit)
     return {"status": "success", "total": total, "page": f.page, "leads": serialize_many(docs)}
+
+
+@router.get("/export")
+async def export_leads(f: LeadFilter = Depends(), user=Depends(get_current_user)):
+    """Stream the current filtered lead set as a CSV download."""
+    db = get_db()
+    query = _build_lead_query(f)
+    docs = await db.leads.find(query).sort("created_at", -1).to_list(10000)
+    cols = ["name", "phone_number", "website", "address", "city", "area",
+            "status", "reviews_average", "reviews_count", "follow_up_date", "notes"]
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([c.replace("_", " ").title() for c in cols])
+    for d in docs:
+        writer.writerow([d.get(c, "") if d.get(c) is not None else "" for c in cols])
+    buf.seek(0)
+    await log_activity(f"Exported {len(docs)} leads to CSV", "leads", user)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leads_export.csv"},
+    )
 
 
 @router.post("")
@@ -95,14 +134,94 @@ async def delete_lead(lead_id: str, user=Depends(get_current_user)):
     return {"status": "success"}
 
 
+@router.post("/bulk")
+async def bulk_action(body: LeadBulkAction, user=Depends(get_current_user)):
+    db = get_db()
+    oids = []
+    for i in body.ids:
+        try:
+            oids.append(parse_object_id(i))
+        except ValueError:
+            continue
+    if not oids:
+        raise HTTPException(status_code=400, detail="No valid lead ids")
+    flt = {"_id": {"$in": oids}}
+
+    if body.action == "delete":
+        res = await db.leads.delete_many(flt)
+        await log_activity(f"Bulk deleted {res.deleted_count} leads", "leads", user)
+        return {"status": "success", "affected": res.deleted_count}
+
+    if body.action == "status":
+        if not body.value:
+            raise HTTPException(status_code=400, detail="status value required")
+        res = await db.leads.update_many(flt, {"$set": {"status": body.value, "updated_at": utcnow()}})
+        await log_activity(f"Bulk set status '{body.value}' on {res.modified_count} leads", "leads", user)
+        return {"status": "success", "affected": res.modified_count}
+
+    if body.action == "move_folder":
+        target = body.value or None  # "" / "unfiled" -> remove from folder
+        if target in ("", "unfiled"):
+            target = None
+        res = await db.leads.update_many(flt, {"$set": {"folder_id": target, "updated_at": utcnow()}})
+        await log_activity(f"Moved {res.modified_count} leads to folder", "leads", user)
+        return {"status": "success", "affected": res.modified_count}
+
+    if body.action == "add_tag":
+        if not body.value:
+            raise HTTPException(status_code=400, detail="tag value required")
+        res = await db.leads.update_many(flt, {"$addToSet": {"tags": body.value}})
+        return {"status": "success", "affected": res.modified_count}
+
+    raise HTTPException(status_code=400, detail="Unknown action")
+
+
+@router.post("/{lead_id}/note")
+async def add_note(lead_id: str, body: LeadNote, user=Depends(get_current_user)):
+    db = get_db()
+    try:
+        oid = parse_object_id(lead_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid lead id")
+    entry = {
+        "action": body.kind.capitalize(),
+        "kind": body.kind,
+        "text": body.text,
+        "at": utcnow().isoformat(),
+        "by": user.get("name"),
+    }
+    result = await db.leads.update_one(
+        {"_id": oid},
+        {"$push": {"activity_history": entry}, "$set": {"updated_at": utcnow()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"status": "success", "entry": entry}
+
+
+@router.get("/{lead_id}")
+async def get_lead(lead_id: str, user=Depends(get_current_user)):
+    db = get_db()
+    try:
+        oid = parse_object_id(lead_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid lead id")
+    doc = await db.leads.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return {"status": "success", "lead": serialize_doc(doc)}
+
+
 @router.post("/import")
 async def import_leads(payload: dict, user=Depends(get_current_user)):
     leads = payload.get("leads", [])
     if not isinstance(leads, list) or not leads:
         raise HTTPException(status_code=400, detail="leads array required")
     db = get_db()
+    folder_id = payload.get("folder_id")
     seen = set()
     inserted = 0
+    filed = 0  # already-existing leads moved into the target folder
     for raw in leads:
         if not raw.get("name"):
             continue
@@ -112,6 +231,15 @@ async def import_leads(payload: dict, user=Depends(get_current_user)):
         if raw.get("phone_number"):
             exists = await db.leads.find_one({"phone_number": raw["phone_number"]})
             if exists:
+                # Lead already in the DB. If we're importing into a folder, file the
+                # existing lead into that folder instead of silently skipping it.
+                if folder_id and str(exists.get("folder_id") or "") != str(folder_id):
+                    await db.leads.update_one(
+                        {"_id": exists["_id"]},
+                        {"$set": {"folder_id": folder_id, "updated_at": utcnow()}},
+                    )
+                    filed += 1
+                seen.add(key)
                 continue
         seen.add(key)
         doc = {
@@ -126,14 +254,17 @@ async def import_leads(payload: dict, user=Depends(get_current_user)):
             "status": raw.get("status", "New"),
             "notes": raw.get("notes", ""),
             "follow_up_date": raw.get("follow_up_date"),
+            "folder_id": payload.get("folder_id") or raw.get("folder_id"),
+            "tags": raw.get("tags", []),
             "created_at": utcnow(),
             "updated_at": utcnow(),
             "activity_history": [],
         }
         await db.leads.insert_one(doc)
         inserted += 1
-    await log_activity(f"Imported {inserted} leads", "leads", user)
-    return {"status": "success", "inserted": inserted, "skipped": len(leads) - inserted}
+    await log_activity(f"Imported {inserted} leads ({filed} existing filed into folder)", "leads", user)
+    return {"status": "success", "inserted": inserted, "filed": filed,
+            "skipped": len(leads) - inserted - filed}
 
 
 @router.post("/scrape")
@@ -146,9 +277,12 @@ async def start_scrape(req: ScrapeRequest, user=Depends(get_current_user)):
         "status": "pending", "progress": "Queued", "data": [], "log": [],
         "found": 0, "target": req.target, "current_area": "",
     }
+    # Use a fresh per-job output folder so a previous scrape's saved file does not
+    # short-circuit this run ("Target already reached"). Each scrape collects fresh.
+    out_dir = os.path.join("output", "jobs", job_id)
     t = threading.Thread(
         target=run_scraper,
-        args=(job_id, [search], req.target, "output", req.no_website_only, req.scope),
+        args=(job_id, [search], req.target, out_dir, req.no_website_only, req.scope),
         daemon=True,
     )
     t.start()
@@ -173,12 +307,15 @@ async def scrape_status(job_id: str, user=Depends(get_current_user)):
 
 
 @router.post("/scrape/{job_id}/save")
-async def save_scrape_to_db(job_id: str, user=Depends(get_current_user)):
+async def save_scrape_to_db(job_id: str, folder_id: str = "", user=Depends(get_current_user)):
     state = JOB_STATES.get(job_id)
     if not state:
         raise HTTPException(status_code=404, detail="Job not found")
     data = state.get("data", [])
     if not data:
         raise HTTPException(status_code=400, detail="No scraped data to save")
-    result = await import_leads({"leads": data}, user)
+    payload = {"leads": data}
+    if folder_id and folder_id != "unfiled":
+        payload["folder_id"] = folder_id
+    result = await import_leads(payload, user)
     return result
