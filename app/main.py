@@ -68,6 +68,8 @@ app.include_router(settings_router.router)
 os.makedirs(settings.upload_dir, exist_ok=True)
 os.makedirs("static/os", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# Serve uploaded files (e.g. outreach images) at /uploads/...
+app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 
 @app.get("/health")

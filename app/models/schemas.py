@@ -31,6 +31,7 @@ class UserCreate(BaseModel):
 class LeadCreate(BaseModel):
     name: str = Field(min_length=1)
     phone_number: str = ""
+    email: str = ""
     address: str = ""
     website: str = ""
     city: str = ""
@@ -47,6 +48,7 @@ class LeadCreate(BaseModel):
 class LeadUpdate(BaseModel):
     name: str | None = None
     phone_number: str | None = None
+    email: str | None = None
     address: str | None = None
     website: str | None = None
     city: str | None = None
@@ -108,13 +110,22 @@ class ScrapeRequest(BaseModel):
 class TemplateCreate(BaseModel):
     name: str = Field(min_length=2)
     channel: Literal["whatsapp", "sms", "email"] = "whatsapp"
-    body: str = Field(min_length=5)
+    subject: str = ""  # used for email channel
+    body: str = ""  # plain text (whatsapp/sms) or auto-derived fallback for block emails
     image_url: str = ""
+    blocks: list[dict] = []  # drag-and-drop email design blocks (email channel)
+
+
+class ManualRecipient(BaseModel):
+    name: str = ""
+    email: str = ""
+    phone: str = ""
 
 
 class CampaignCreate(BaseModel):
     template_id: str
     lead_ids: list[str] = []
+    manual_recipients: list[ManualRecipient] = []
     channel: str = "whatsapp"
     mark_contacted: bool = True
 
@@ -228,6 +239,10 @@ class SettingsUpdate(BaseModel):
     whatsapp_country_code: str | None = None
     twilio_account_sid: str | None = None
     twilio_from_number: str | None = None
+    # Gmail (SMTP app-password) for email outreach
+    gmail_address: str | None = None
+    gmail_app_password: str | None = None
+    gmail_sender_name: str | None = None
 
 
 class APIResponse(BaseModel):

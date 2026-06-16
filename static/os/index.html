@@ -98,6 +98,8 @@
     .badge-success { background: #ecfdf5; color: #047857; }
     .badge-warn { background: #fffbeb; color: #b45309; }
     .badge-danger { background: #fef2f2; color: #b91c1c; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 1.35rem; height: 1.35rem; border-radius: 9999px; background: #111827; color: #fff; font-size: 0.72rem; font-weight: 700; flex: none; }
+    code { background: #f1f5f9; color: #334155; padding: 0.05rem 0.3rem; border-radius: 0.25rem; font-size: 0.72rem; }
 
     /* ── Override leftover dark utility classes ──────────────────── */
     .text-white { color: #111827 !important; }
@@ -491,6 +493,7 @@
               <div><label class="block text-xs text-slate-400 mb-1">Phone</label><input name="phone_number" class="input-field" /></div>
               <div><label class="block text-xs text-slate-400 mb-1">City</label><input name="city" class="input-field" /></div>
             </div>
+            <div><label class="block text-xs text-slate-400 mb-1">Email</label><input name="email" type="email" class="input-field" placeholder="contact@business.com" /></div>
             <div><label class="block text-xs text-slate-400 mb-1">Address</label><input name="address" class="input-field" /></div>
             <div class="grid grid-cols-2 gap-3">
               <div><label class="block text-xs text-slate-400 mb-1">Folder</label><select name="folder_id" id="lead-form-folder" class="input-field"><option value="">— None —</option></select></div>
@@ -537,10 +540,12 @@
               </select>
             </div>
             <div><label class="block text-xs text-slate-400 mb-1">Follow-up date</label><input id="ld-followup" type="date" class="input-field" /></div>
+            <div class="md:col-span-2"><label class="block text-xs text-slate-400 mb-1">Email <span class="text-slate-500">(for email outreach)</span></label><input id="ld-email" type="email" class="input-field" placeholder="contact@business.com" /></div>
           </div>
           <div class="flex gap-2 mb-5">
             <button id="ld-save" class="btn-primary text-sm"><i class="fa-solid fa-floppy-disk mr-1"></i>Save changes</button>
             <a id="ld-whatsapp" target="_blank" class="btn-secondary text-sm"><i class="fa-brands fa-whatsapp mr-1"></i>WhatsApp</a>
+            <a id="ld-email-link" target="_blank" class="btn-secondary text-sm hidden"><i class="fa-solid fa-envelope mr-1"></i>Email</a>
           </div>
           <div class="border-t border-white/10 pt-4">
             <h4 class="font-semibold text-white text-sm mb-2"><i class="fa-solid fa-timeline mr-2"></i>Activity Timeline</h4>
@@ -607,54 +612,107 @@
 
     <!-- Outreach -->
     <section id="tab-outreach" class="tab-panel space-y-6">
+      <p class="text-sm text-slate-400 -mt-2">Create a reusable message <b>template</b> on the left, then build a <b>campaign</b> on the right: pick a template, add recipients, and send. The channel (WhatsApp / Email / SMS) comes from the template you choose.</p>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- ── Templates ── -->
         <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4">Message Templates</h3>
+          <h3 class="font-semibold text-white mb-1"><i class="fa-regular fa-pen-to-square mr-2 text-indigo-400"></i>Message Templates</h3>
+          <p class="text-xs text-slate-500 mb-4">Write once, reuse for every campaign. Use <code>{name}</code>, <code>{city}</code> etc. — they're filled in per lead.</p>
           <form id="template-form" class="space-y-3 mb-4">
             <input type="hidden" id="template-edit-id" />
-            <div><label class="block text-xs text-slate-400 mb-1">Name</label><input id="tpl-name" class="input-field" required minlength="2" placeholder="Intro WhatsApp" /></div>
-            <div><label class="block text-xs text-slate-400 mb-1">Channel</label>
-              <select id="tpl-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option><option value="email">Email</option></select>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs text-slate-400 mb-1">Template name</label><input id="tpl-name" class="input-field" required minlength="2" placeholder="Intro message" /></div>
+              <div><label class="block text-xs text-slate-400 mb-1">Send via</label>
+                <select id="tpl-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="sms">SMS</option></select>
+              </div>
             </div>
-            <div><label class="block text-xs text-slate-400 mb-1">Body</label><textarea id="tpl-body" class="input-field h-24" required minlength="5" placeholder="Hi {name}, …"></textarea>
-              <p class="text-xs text-slate-500 mt-1">Variables: {name} {phone} {city} {address} {company} {your_name} {rating}</p>
+            <div id="tpl-subject-wrap" class="hidden"><label class="block text-xs text-slate-400 mb-1">Email subject</label><input id="tpl-subject" class="input-field" placeholder="Helping {name} grow online" /></div>
+
+            <!-- Plain message (WhatsApp / SMS) -->
+            <div id="tpl-body-wrap"><label class="block text-xs text-slate-400 mb-1">Message</label><textarea id="tpl-body" class="input-field h-28" minlength="5" placeholder="Hi {name}, …"></textarea>
+              <p class="text-xs text-slate-500 mt-1">Variables: <code>{name}</code> <code>{phone}</code> <code>{city}</code> <code>{address}</code> <code>{company}</code> <code>{your_name}</code> <code>{rating}</code></p>
             </div>
-            <div><label class="block text-xs text-slate-400 mb-1">Image URL <span class="text-slate-500">(optional — added as a link)</span></label><input id="tpl-image" class="input-field" placeholder="https://…/flyer.jpg" /></div>
-            <div class="flex gap-2"><button type="submit" class="btn-primary">Save Template</button><button type="button" id="tpl-reset" class="btn-secondary">Reset</button></div>
+
+            <!-- Block designer (Email) -->
+            <div id="tpl-blocks-wrap" class="hidden">
+              <label class="block text-xs text-slate-400 mb-1">Email design <span class="text-slate-500">— add blocks, drag <i class="fa-solid fa-grip-vertical"></i> to reorder</span></label>
+              <div class="flex flex-wrap gap-1.5 mb-2">
+                <button type="button" class="add-block btn-secondary text-xs" data-block="heading"><i class="fa-solid fa-heading mr-1"></i>Heading</button>
+                <button type="button" class="add-block btn-secondary text-xs" data-block="text"><i class="fa-solid fa-align-left mr-1"></i>Text</button>
+                <button type="button" class="add-block btn-secondary text-xs" data-block="image"><i class="fa-solid fa-image mr-1"></i>Image</button>
+                <button type="button" class="add-block btn-secondary text-xs" data-block="button"><i class="fa-solid fa-link mr-1"></i>Button</button>
+                <button type="button" class="add-block btn-secondary text-xs" data-block="divider"><i class="fa-solid fa-grip-lines mr-1"></i>Divider</button>
+              </div>
+              <div id="tpl-blocks-list" class="space-y-2"></div>
+              <p class="text-xs text-slate-500 mt-1">Variables work in any text: <code>{name}</code> <code>{city}</code> <code>{company}</code> <code>{your_name}</code> …</p>
+              <div class="mt-3">
+                <label class="block text-xs text-slate-400 mb-1">Live preview</label>
+                <div id="tpl-blocks-preview" class="bg-white text-black rounded-lg border border-slate-200 p-3 max-h-72 overflow-y-auto"></div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-400 mb-1">Image <span class="text-slate-500">(optional — embedded in emails, linked in WhatsApp)</span></label>
+              <input type="file" id="tpl-image-file" accept="image/png,image/jpeg" class="hidden" />
+              <input type="hidden" id="tpl-image" />
+              <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" id="tpl-image-btn" class="btn-secondary text-xs"><i class="fa-solid fa-upload mr-1"></i>Upload from computer</button>
+                <span id="tpl-image-name" class="text-xs text-slate-500">No image selected</span>
+                <button type="button" id="tpl-image-clear" class="text-xs text-rose-400 hidden"><i class="fa-solid fa-xmark mr-1"></i>Remove</button>
+              </div>
+              <img id="tpl-image-preview" alt="" class="hidden mt-2 max-h-28 rounded-lg border border-white/10" />
+            </div>
+            <div class="flex gap-2 pt-1"><button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk mr-1"></i>Save Template</button><button type="button" id="tpl-reset" class="btn-secondary">New / Clear</button></div>
           </form>
+          <p class="text-xs text-slate-400 font-medium mb-2">Saved templates</p>
           <div id="templates-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
         </div>
-        <div class="glass rounded-xl p-5">
-          <h3 class="font-semibold text-white mb-4">Create Campaign</h3>
-          <form id="campaign-form" class="space-y-4">
-            <div><label class="block text-xs text-slate-400 mb-1">Template</label><select id="campaign-template" class="input-field" required></select></div>
 
+        <!-- ── Campaign ── -->
+        <div class="glass rounded-xl p-5">
+          <h3 class="font-semibold text-white mb-4"><i class="fa-solid fa-rocket mr-2 text-indigo-400"></i>Send a Campaign</h3>
+          <form id="campaign-form" class="space-y-5">
+            <input type="hidden" id="campaign-channel" value="whatsapp" />
+
+            <!-- Step 1 -->
             <div>
-              <div class="flex items-center justify-between mb-1">
-                <label class="block text-xs text-slate-400">Recipients</label>
-                <span class="text-xs text-indigo-300"><span id="campaign-recipient-count">0</span> selected</span>
-              </div>
+              <label class="flex items-center gap-2 text-sm font-medium text-white mb-2"><span class="step-num">1</span>Choose a template</label>
+              <select id="campaign-template" class="input-field" required></select>
+              <p class="text-xs text-slate-500 mt-1.5">Will send via <span id="campaign-channel-badge" class="badge badge-new">—</span></p>
+            </div>
+
+            <!-- Step 2 -->
+            <div>
+              <label class="flex items-center gap-2 text-sm font-medium text-white mb-2"><span class="step-num">2</span>Add recipients <span class="text-xs text-indigo-300 font-normal">(<span id="campaign-recipient-count">0</span> selected)</span></label>
               <div class="flex gap-2 mb-2">
-                <input id="campaign-lead-search" class="input-field" placeholder="Search leads to add…" />
-                <button type="button" id="campaign-clear-recipients" class="btn-secondary text-xs whitespace-nowrap">Clear</button>
+                <input id="campaign-lead-search" class="input-field" placeholder="Search leads by name or phone…" />
+                <button type="button" id="campaign-clear-recipients" class="btn-secondary text-xs whitespace-nowrap">Clear all</button>
               </div>
               <div id="campaign-lead-results" class="hidden space-y-1 max-h-40 overflow-y-auto mb-2 border border-white/10 rounded-lg p-2"></div>
               <div id="campaign-recipients" class="flex flex-wrap gap-1.5 min-h-[2.25rem] p-2 rounded-lg bg-slate-900/40 border border-white/10">
-                <span class="text-xs text-slate-500" id="campaign-recipients-empty">No recipients yet — select leads in the Leads tab or search above.</span>
+                <span class="text-xs text-slate-500" id="campaign-recipients-empty">No recipients yet — search for leads above and tick the ones you want.</span>
               </div>
+
+              <details class="mt-2">
+                <summary class="text-xs text-indigo-300 cursor-pointer select-none">+ Add a recipient manually (type a phone or email)</summary>
+                <div class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input id="manual-rcpt-name" class="input-field text-sm" placeholder="Name (optional)" />
+                  <input id="manual-rcpt-phone" class="input-field text-sm" placeholder="Phone (WhatsApp/SMS)" />
+                  <input id="manual-rcpt-email" type="email" class="input-field text-sm" placeholder="Email (Gmail)" />
+                </div>
+                <button type="button" id="manual-rcpt-add" class="btn-secondary text-xs mt-2"><i class="fa-solid fa-plus mr-1"></i>Add recipient</button>
+                <p class="text-xs text-slate-500 mt-1">Tip: add a phone for WhatsApp/SMS templates, or an email for email templates.</p>
+              </details>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <div><label class="block text-xs text-slate-400 mb-1">Channel</label><select id="campaign-channel" class="input-field"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select></div>
-              <label class="flex items-end gap-2 text-sm pb-2"><input type="checkbox" id="campaign-mark" checked /> Mark as contacted</label>
-            </div>
-
+            <!-- Step 3 -->
             <div>
-              <label class="block text-xs text-slate-400 mb-1">Message preview <span class="text-slate-600">(first recipient)</span></label>
-              <div id="campaign-preview" class="text-sm text-slate-200 whitespace-pre-wrap bg-slate-900/40 border border-white/10 rounded-lg p-3 min-h-[3rem]">Select a template and recipient to preview.</div>
+              <label class="flex items-center gap-2 text-sm font-medium text-white mb-2"><span class="step-num">3</span>Review &amp; send</label>
+              <div id="campaign-preview" class="text-sm text-slate-200 whitespace-pre-wrap bg-slate-900/40 border border-white/10 rounded-lg p-3 min-h-[3rem]">Pick a template and a recipient to see a preview.</div>
+              <label class="flex items-center gap-2 text-sm mt-3"><input type="checkbox" id="campaign-mark" checked /> Mark recipients as “Contacted” after sending</label>
             </div>
 
-            <button type="submit" class="btn-primary w-full"><i class="fa-solid fa-rocket mr-1"></i>Launch Campaign</button>
+            <button type="submit" class="btn-primary w-full"><i class="fa-solid fa-paper-plane mr-1"></i>Send Campaign</button>
           </form>
           <div id="campaign-result" class="mt-4 hidden"></div>
         </div>
@@ -1108,6 +1166,20 @@
                 <span class="badge badge-success">No API key needed</span>
               </div>
               <p class="text-xs text-slate-400"><b>What:</b> Collects business leads from Google Maps. <b>Where:</b> Leads → Scrape New Leads. Runs locally in a headless browser.</p>
+            </div>
+
+            <!-- Gmail email outreach -->
+            <div class="border border-white/10 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2"><i class="fa-solid fa-envelope text-red-500"></i><span class="font-medium text-white text-sm">Gmail (Email outreach)</span></div>
+                <span class="badge badge-warn" id="gmail-status">Optional</span>
+              </div>
+              <p class="text-xs text-slate-400 mb-3"><b>What:</b> Sends real emails from your Gmail. <b>Where:</b> Outreach when channel = Email. Requires 2-Step Verification + a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-indigo-400 underline">App Password</a> (not your normal Gmail password).</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div><label class="block text-xs text-slate-400 mb-1">Gmail address</label><input name="gmail_address" type="email" class="input-field" placeholder="you@gmail.com" /></div>
+                <div><label class="block text-xs text-slate-400 mb-1">App Password</label><input name="gmail_app_password" type="password" class="input-field" placeholder="16-char app password" autocomplete="off" /></div>
+                <div class="md:col-span-2"><label class="block text-xs text-slate-400 mb-1">Sender name <span class="text-slate-500">(shown to recipients)</span></label><input name="gmail_sender_name" class="input-field" placeholder="RecruitKr Team" /></div>
+              </div>
             </div>
 
             <!-- Twilio (optional) -->

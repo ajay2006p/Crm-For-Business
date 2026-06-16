@@ -43,6 +43,19 @@ DEFAULT_TEMPLATES = [
         ),
     },
     {
+        "id": "intro-email",
+        "name": "Introduction — Email",
+        "channel": "email",
+        "subject": "Helping {name} grow online",
+        "body": (
+            "Hi {name},\n\n"
+            "I'm {your_name} from {company}. We help businesses like yours grow online.\n\n"
+            "I came across your business in {city} and would love to share a few ideas. "
+            "Would you be open to a quick call this week?\n\n"
+            "Best regards,\n{your_name}\n{company}"
+        ),
+    },
+    {
         "id": "no-website",
         "name": "No Website Offer",
         "channel": "whatsapp",
@@ -126,6 +139,7 @@ def render_message(body: str, lead: dict, settings: dict | None = None) -> str:
     mapping = {
         "name": lead.get("name") or "there",
         "phone": lead.get("phone_number") or "",
+        "email": lead.get("email") or "",
         "address": lead.get("address") or "",
         "city": city,
         "website": lead.get("website") or "N/A",

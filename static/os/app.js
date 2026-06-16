@@ -6,7 +6,10 @@ const USER_KEY = 'rk_user';
 
 let currentUser = null;
 let leadsPage = 1;
-let selectedLeads = new Map(); // id -> {name, phone}
+let selectedLeads = new Map(); // id -> {name, phone}  — Leads-tab bulk selection
+let campaignRecipients = new Map(); // id -> {name, phone}  — Outreach campaign recipients (independent)
+let manualRecipients = []; // [{name, email, phone}]  — ad-hoc recipients typed by hand
+let tplBlocks = []; // drag-and-drop email design blocks for the template being edited
 let leadsCache = [];
 let scrapeJobId = null;
 let scrapePollTimer = null;
@@ -942,20 +945,23 @@ async function loadTemplates() {
       return;
     }
     templatesCache = {};
-    list.innerHTML = templates.map(t => {
-      templatesCache[t.id] = t;
-      return `
+    templates.forEach(t => { templatesCache[t.id] = t; });
+    list.innerHTML = templates.map(t => `
       <div class="glass rounded-lg p-3 text-sm">
-        <div class="flex justify-between items-start">
-          <div><p class="font-medium text-white">${esc(t.name)}</p>
-          <p class="text-xs text-slate-400">${esc(t.channel)} · ${esc((t.body || '').slice(0, 60))}…</p></div>
-          <div class="flex gap-1">
+        <div class="flex justify-between items-start gap-2">
+          <div class="min-w-0 flex items-start gap-2">
+            ${t.image_url ? `<img src="${esc(t.image_url)}" alt="" class="w-9 h-9 rounded object-cover border border-white/10 flex-none" />` : ''}
+            <div class="min-w-0">
+              <p class="font-medium text-white truncate">${esc(t.name)} <span class="badge badge-new ml-1">${esc(CHANNEL_LABELS[t.channel] || t.channel)}</span></p>
+              <p class="text-xs text-slate-400 truncate">${esc((t.body || '').slice(0, 70))}…</p>
+            </div>
+          </div>
+          <div class="flex gap-1 flex-none">
             <button class="btn-secondary text-xs edit-tpl" data-id="${esc(t.id)}">Edit</button>
             <button class="btn-secondary text-xs delete-tpl" data-id="${esc(t.id)}">Del</button>
           </div>
         </div>
-      </div>`;
-    }).join('');
+      </div>`).join('');
 
     list.querySelectorAll('.edit-tpl').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -963,8 +969,12 @@ async function loadTemplates() {
         document.getElementById('template-edit-id').value = t.id || '';
         document.getElementById('tpl-name').value = t.name || '';
         document.getElementById('tpl-channel').value = t.channel || 'whatsapp';
+        document.getElementById('tpl-subject').value = t.subject || '';
         document.getElementById('tpl-body').value = t.body || '';
-        document.getElementById('tpl-image').value = t.image_url || '';
+        setTplImage(t.image_url || '', t.image_url ? 'Current image' : '');
+        tplBlocks = Array.isArray(t.blocks) ? structuredClone(t.blocks) : [];
+        toggleTemplateMode();
+        document.getElementById('template-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
     });
     list.querySelectorAll('.delete-tpl').forEach(btn => {
@@ -977,6 +987,7 @@ async function loadTemplates() {
         } catch (e) { notify(e.message, 'error'); }
       });
     });
+    onCampaignTemplateChange();  // sync the campaign channel badge to the default template
   } catch (err) {
     notify(err.message, 'error');
   }
@@ -987,11 +998,18 @@ async function saveTemplate(e) {
   const form = document.getElementById('template-form');
   if (!validateForm(form)) return;
 
+  const channel = document.getElementById('tpl-channel').value;
+  const isEmail = channel === 'email';
+  if (isEmail && !tplBlocks.length) { notify('Add at least one block to the email design', 'error'); return; }
+  if (!isEmail && document.getElementById('tpl-body').value.trim().length < 5) { notify('Message must be at least 5 characters', 'error'); return; }
+
   const body = {
     name: document.getElementById('tpl-name').value.trim(),
-    channel: document.getElementById('tpl-channel').value,
-    body: document.getElementById('tpl-body').value.trim(),
-    image_url: document.getElementById('tpl-image').value.trim(),
+    channel,
+    subject: document.getElementById('tpl-subject').value.trim(),
+    body: isEmail ? blocksToText(tplBlocks) : document.getElementById('tpl-body').value.trim(),
+    image_url: isEmail ? '' : document.getElementById('tpl-image').value.trim(),
+    blocks: isEmail ? tplBlocks : [],
   };
   const editId = document.getElementById('template-edit-id').value;
 
@@ -1006,6 +1024,9 @@ async function saveTemplate(e) {
     }
     document.getElementById('template-edit-id').value = '';
     form.reset();
+    setTplImage('');
+    tplBlocks = [];
+    toggleTemplateMode();
     loadTemplates();
   } catch (err) {
     notify(err.message, 'error');
@@ -1014,27 +1035,257 @@ async function saveTemplate(e) {
   }
 }
 
-/* ── Outreach recipient picker (shares `selectedLeads` with the Leads tab) ──── */
+const CHANNEL_LABELS = { whatsapp: 'WhatsApp', email: 'Email (Gmail)', sms: 'SMS' };
+
+// Reflect an image URL in the template form (hidden value + preview + name).
+function setTplImage(url, name) {
+  document.getElementById('tpl-image').value = url || '';
+  const preview = document.getElementById('tpl-image-preview');
+  const nameEl = document.getElementById('tpl-image-name');
+  const clearBtn = document.getElementById('tpl-image-clear');
+  if (url) {
+    preview.src = url; preview.classList.remove('hidden');
+    nameEl.textContent = name || 'Image attached';
+    clearBtn.classList.remove('hidden');
+  } else {
+    preview.src = ''; preview.classList.add('hidden');
+    nameEl.textContent = 'No image selected';
+    clearBtn.classList.add('hidden');
+  }
+}
+
+async function uploadTplImage(file) {
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  setLoading(true);
+  try {
+    const res = await api('/api/outreach/upload-image', { method: 'POST', body: fd });
+    setTplImage(res.url, res.name);
+    notify('Image uploaded', 'success');
+  } catch (err) {
+    notify(err.message, 'error');
+  } finally {
+    setLoading(false);
+    document.getElementById('tpl-image-file').value = '';
+  }
+}
+
+// Campaign channel is derived from the selected template (no separate selector).
+function onCampaignTemplateChange() {
+  const tpl = templatesCache[document.getElementById('campaign-template').value];
+  const ch = (tpl && tpl.channel) || 'whatsapp';
+  document.getElementById('campaign-channel').value = ch;
+  document.getElementById('campaign-channel-badge').textContent = CHANNEL_LABELS[ch] || ch;
+  updateCampaignPreview();
+}
+
+/* ── Drag-and-drop email block editor ─────────────────────────────────────── */
+const BLOCK_TYPES = {
+  heading: { label: 'Heading', defaults: { text: 'Hi {name} 👋', align: 'left', size: 'large', color: '#111827' } },
+  text:    { label: 'Text',    defaults: { text: 'We help businesses in {city} grow online.', align: 'left', color: '#374151' } },
+  image:   { label: 'Image',   defaults: { url: '', align: 'center' } },
+  button:  { label: 'Button',  defaults: { text: 'Get in touch', url: 'https://', align: 'center', color: '#2563eb' } },
+  divider: { label: 'Divider', defaults: {} },
+};
+const ALIGN_OPTS = ['left', 'center', 'right'];
+
+// Show plain textarea (whatsapp/sms) vs. block designer (email) + subject.
+function toggleTemplateMode() {
+  const isEmail = document.getElementById('tpl-channel').value === 'email';
+  document.getElementById('tpl-subject-wrap').classList.toggle('hidden', !isEmail);
+  document.getElementById('tpl-body-wrap').classList.toggle('hidden', isEmail);
+  document.getElementById('tpl-blocks-wrap').classList.toggle('hidden', !isEmail);
+  if (isEmail && !tplBlocks.length) { tplBlocks = [structuredClone(BLOCK_TYPES.heading.defaults), { ...BLOCK_TYPES.text.defaults }]; tplBlocks[0].type = 'heading'; tplBlocks[1].type = 'text'; }
+  renderBlockList();
+}
+
+function addBlock(type) {
+  tplBlocks.push({ type, ...structuredClone(BLOCK_TYPES[type].defaults) });
+  renderBlockList();
+}
+function removeBlock(i) { tplBlocks.splice(i, 1); renderBlockList(); }
+function moveBlock(from, to) {
+  if (to < 0 || to >= tplBlocks.length) return;
+  const [b] = tplBlocks.splice(from, 1);
+  tplBlocks.splice(to, 0, b);
+  renderBlockList();
+}
+
+function alignSelect(i, val) {
+  return `<select data-idx="${i}" data-field="align" class="input-field text-xs py-1">${ALIGN_OPTS.map(a => `<option value="${a}" ${val === a ? 'selected' : ''}>${a}</option>`).join('')}</select>`;
+}
+
+function renderBlockList() {
+  const list = document.getElementById('tpl-blocks-list');
+  if (!list) return;
+  list.innerHTML = tplBlocks.map((b, i) => {
+    let fields = '';
+    if (b.type === 'heading') {
+      fields = `
+        <input data-idx="${i}" data-field="text" class="input-field text-sm" value="${esc(b.text || '')}" placeholder="Heading" />
+        <div class="grid grid-cols-3 gap-2 mt-2">
+          <select data-idx="${i}" data-field="size" class="input-field text-xs py-1">${['small', 'normal', 'large'].map(s => `<option value="${s}" ${b.size === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          ${alignSelect(i, b.align)}
+          <input type="color" data-idx="${i}" data-field="color" class="input-field h-8 p-1" value="${esc(b.color || '#111827')}" />
+        </div>`;
+    } else if (b.type === 'text') {
+      fields = `
+        <textarea data-idx="${i}" data-field="text" class="input-field text-sm h-20" placeholder="Paragraph text…">${esc(b.text || '')}</textarea>
+        <div class="grid grid-cols-2 gap-2 mt-2">${alignSelect(i, b.align)}<input type="color" data-idx="${i}" data-field="color" class="input-field h-8 p-1" value="${esc(b.color || '#374151')}" /></div>`;
+    } else if (b.type === 'image') {
+      fields = `
+        <div class="flex items-center gap-2 flex-wrap">
+          <button type="button" class="block-img-upload btn-secondary text-xs" data-idx="${i}"><i class="fa-solid fa-upload mr-1"></i>Upload image</button>
+          ${b.url ? `<img src="${esc(b.url)}" class="h-10 rounded border border-white/10" alt="" />` : '<span class="text-xs text-slate-500">No image</span>'}
+        </div>
+        <input data-idx="${i}" data-field="url" class="input-field text-xs mt-2" value="${esc(b.url || '')}" placeholder="…or paste an image URL" />
+        <div class="mt-2">${alignSelect(i, b.align)}</div>`;
+    } else if (b.type === 'button') {
+      fields = `
+        <input data-idx="${i}" data-field="text" class="input-field text-sm" value="${esc(b.text || '')}" placeholder="Button label" />
+        <input data-idx="${i}" data-field="url" class="input-field text-sm mt-2" value="${esc(b.url || '')}" placeholder="https://link-or-tel:123" />
+        <div class="grid grid-cols-2 gap-2 mt-2">${alignSelect(i, b.align)}<input type="color" data-idx="${i}" data-field="color" class="input-field h-8 p-1" value="${esc(b.color || '#2563eb')}" /></div>`;
+    } else {
+      fields = '<p class="text-xs text-slate-500">Horizontal divider line.</p>';
+    }
+    return `
+      <div class="block-card glass rounded-lg p-2.5" draggable="true" data-idx="${i}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-medium text-white"><i class="fa-solid fa-grip-vertical text-slate-500 mr-2 cursor-move"></i>${BLOCK_TYPES[b.type].label}</span>
+          <span class="flex gap-1">
+            <button type="button" class="block-up btn-secondary text-xs" data-idx="${i}" title="Move up">↑</button>
+            <button type="button" class="block-down btn-secondary text-xs" data-idx="${i}" title="Move down">↓</button>
+            <button type="button" class="block-del btn-secondary text-xs" data-idx="${i}" title="Delete">✕</button>
+          </span>
+        </div>
+        ${fields}
+      </div>`;
+  }).join('') || '<p class="text-xs text-slate-500">No blocks yet — add one above.</p>';
+
+  // field edits
+  list.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      tplBlocks[+el.dataset.idx][el.dataset.field] = el.value;
+      updateBlockPreview();
+    });
+  });
+  list.querySelectorAll('.block-del').forEach(b => b.addEventListener('click', () => removeBlock(+b.dataset.idx)));
+  list.querySelectorAll('.block-up').forEach(b => b.addEventListener('click', () => moveBlock(+b.dataset.idx, +b.dataset.idx - 1)));
+  list.querySelectorAll('.block-down').forEach(b => b.addEventListener('click', () => moveBlock(+b.dataset.idx, +b.dataset.idx + 1)));
+  list.querySelectorAll('.block-img-upload').forEach(b => b.addEventListener('click', () => uploadBlockImage(+b.dataset.idx)));
+
+  // drag to reorder
+  let dragFrom = null;
+  list.querySelectorAll('.block-card').forEach(card => {
+    card.addEventListener('dragstart', () => { dragFrom = +card.dataset.idx; card.classList.add('opacity-50'); });
+    card.addEventListener('dragend', () => card.classList.remove('opacity-50'));
+    card.addEventListener('dragover', e => e.preventDefault());
+    card.addEventListener('drop', e => { e.preventDefault(); const to = +card.dataset.idx; if (dragFrom !== null && dragFrom !== to) moveBlock(dragFrom, to); dragFrom = null; });
+  });
+
+  updateBlockPreview();
+}
+
+async function uploadBlockImage(i) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/png,image/jpeg';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData(); fd.append('file', file);
+    setLoading(true);
+    try {
+      const res = await api('/api/outreach/upload-image', { method: 'POST', body: fd });
+      tplBlocks[i].url = res.url;
+      renderBlockList();
+      notify('Image added', 'success');
+    } catch (err) { notify(err.message, 'error'); }
+    finally { setLoading(false); }
+  };
+  input.click();
+}
+
+// Client-side block renderer (mirrors template_render.py) for the live preview.
+const HEADING_PX = { small: '16px', normal: '20px', large: '26px' };
+function sampleFill(s) {
+  return String(s || '')
+    .replaceAll('{name}', 'there').replaceAll('{city}', 'your city')
+    .replaceAll('{company}', appSettings.company || 'RecruitKR')
+    .replaceAll('{your_name}', appSettings.your_name || 'Admin');
+}
+function renderBlocksHtml(blocks) {
+  const parts = (blocks || []).map(b => {
+    const align = ALIGN_OPTS.includes(b.align) ? b.align : 'left';
+    const text = esc(sampleFill(b.text));
+    if (b.type === 'heading') return `<h2 style="margin:0 0 12px;font-size:${HEADING_PX[b.size] || '26px'};font-weight:700;text-align:${align};color:${b.color || '#111827'}">${text}</h2>`;
+    if (b.type === 'text') return `<p style="margin:0 0 12px;font-size:14px;line-height:1.5;text-align:${align};color:${b.color || '#374151'}">${text.replaceAll('\n', '<br>')}</p>`;
+    if (b.type === 'image') return b.url ? `<p style="margin:0 0 12px;text-align:${align}"><img src="${esc(b.url)}" style="max-width:100%;border-radius:8px" alt="" /></p>` : '';
+    if (b.type === 'button') return `<p style="margin:0 0 12px;text-align:${align}"><a href="${esc(b.url) || '#'}" style="background:${b.color || '#2563eb'};color:#fff;padding:11px 22px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:14px">${text || 'Click here'}</a></p>`;
+    if (b.type === 'divider') return '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0" />';
+    return '';
+  });
+  return `<div style="font-family:Arial,sans-serif;color:#111827;max-width:600px;margin:0 auto">${parts.join('')}</div>`;
+}
+function updateBlockPreview() {
+  const el = document.getElementById('tpl-blocks-preview');
+  if (el) el.innerHTML = renderBlocksHtml(tplBlocks);
+}
+function blocksToText(blocks) {
+  return (blocks || []).map(b => {
+    if (b.type === 'divider') return '----------';
+    if (b.type === 'image') return b.url || '';
+    if (b.type === 'button') return `${b.text || 'Click here'}: ${b.url || ''}`.trim();
+    return b.text || '';
+  }).filter(Boolean).join('\n\n');
+}
+
+/* ── Outreach recipient picker (own selection, independent of the Leads tab) ── */
 function renderCampaignRecipients() {
   const wrap = document.getElementById('campaign-recipients');
   if (!wrap) return;
-  document.getElementById('campaign-recipient-count').textContent = selectedLeads.size;
-  if (!selectedLeads.size) {
-    wrap.innerHTML = '<span class="text-xs text-slate-500" id="campaign-recipients-empty">No recipients yet — select leads in the Leads tab or search above.</span>';
+  const total = campaignRecipients.size + manualRecipients.length;
+  document.getElementById('campaign-recipient-count').textContent = total;
+  if (!total) {
+    wrap.innerHTML = '<span class="text-xs text-slate-500" id="campaign-recipients-empty">No recipients yet — search for leads above, or add one manually below.</span>';
     updateCampaignPreview();
     return;
   }
-  wrap.innerHTML = [...selectedLeads.entries()].map(([id, l]) => `
+  const leadChips = [...campaignRecipients.entries()].map(([id, l]) => `
     <span class="chip">
       ${esc(l.name || 'Lead')}${l.phone ? ` · ${esc(l.phone)}` : ''}
       <button type="button" class="recipient-remove hover:text-black" data-id="${esc(id)}"><i class="fa-solid fa-xmark"></i></button>
-    </span>`).join('');
+    </span>`);
+  const manualChips = manualRecipients.map((m, i) => `
+    <span class="chip">
+      <i class="fa-solid fa-user-pen text-[10px] mr-1"></i>${esc(m.name || m.email || m.phone)}
+      <button type="button" class="manual-remove hover:text-black" data-i="${i}"><i class="fa-solid fa-xmark"></i></button>
+    </span>`);
+  wrap.innerHTML = leadChips.concat(manualChips).join('');
   wrap.querySelectorAll('.recipient-remove').forEach(b => b.addEventListener('click', () => {
-    selectedLeads.delete(b.dataset.id);
+    campaignRecipients.delete(b.dataset.id);
+    const cb = document.querySelector(`.campaign-pick[data-id="${b.dataset.id}"]`);
+    if (cb) cb.checked = false;
     renderCampaignRecipients();
-    updateSelectionUI();
+  }));
+  wrap.querySelectorAll('.manual-remove').forEach(b => b.addEventListener('click', () => {
+    manualRecipients.splice(+b.dataset.i, 1);
+    renderCampaignRecipients();
   }));
   updateCampaignPreview();
+}
+
+function addManualRecipient() {
+  const name = document.getElementById('manual-rcpt-name').value.trim();
+  const phone = document.getElementById('manual-rcpt-phone').value.trim();
+  const email = document.getElementById('manual-rcpt-email').value.trim();
+  if (!phone && !email) { notify('Enter a phone number or an email', 'error'); return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { notify('Enter a valid email address', 'error'); return; }
+  manualRecipients.push({ name, phone, email });
+  document.getElementById('manual-rcpt-name').value = '';
+  document.getElementById('manual-rcpt-phone').value = '';
+  document.getElementById('manual-rcpt-email').value = '';
+  renderCampaignRecipients();
 }
 
 let campaignSearchTimer = null;
@@ -1051,16 +1302,15 @@ function searchCampaignLeads() {
       box.innerHTML = leads.length
         ? leads.map(l => `
           <label class="flex items-center gap-2 text-xs text-slate-200 hover:bg-white/5 rounded px-1.5 py-1 cursor-pointer">
-            <input type="checkbox" class="campaign-pick" data-id="${esc(l.id)}" data-name="${esc(l.name)}" data-phone="${esc(l.phone_number || '')}" ${selectedLeads.has(l.id) ? 'checked' : ''} />
+            <input type="checkbox" class="campaign-pick" data-id="${esc(l.id)}" data-name="${esc(l.name)}" data-phone="${esc(l.phone_number || '')}" ${campaignRecipients.has(l.id) ? 'checked' : ''} />
             <span class="font-medium text-white">${esc(l.name)}</span>
             <span class="text-slate-500">${esc(l.phone_number || '')}</span>
           </label>`).join('')
         : '<p class="text-xs text-slate-500 px-1.5 py-1">No matches</p>';
       box.querySelectorAll('.campaign-pick').forEach(cb => cb.addEventListener('change', () => {
-        if (cb.checked) selectedLeads.set(cb.dataset.id, { name: cb.dataset.name, phone: cb.dataset.phone });
-        else selectedLeads.delete(cb.dataset.id);
+        if (cb.checked) campaignRecipients.set(cb.dataset.id, { name: cb.dataset.name, phone: cb.dataset.phone });
+        else campaignRecipients.delete(cb.dataset.id);
         renderCampaignRecipients();
-        updateSelectionUI();
       }));
     } catch (e) { notify(e.message, 'error'); }
   }, 300);
@@ -1071,17 +1321,28 @@ async function updateCampaignPreview() {
   if (!el) return;
   const tplId = document.getElementById('campaign-template').value;
   const tpl = templatesCache[tplId];
-  const first = [...selectedLeads.values()][0];
-  if (!tpl || !tpl.body) { el.textContent = 'Select a template and recipient to preview.'; return; }
+  const first = [...campaignRecipients.values()][0] || manualRecipients[0];
+  if (!tpl) { el.textContent = 'Pick a template and a recipient to see a preview.'; return; }
   const sample = first || { name: 'there' };
   try {
     const res = await api('/api/outreach/preview', {
       method: 'POST',
-      body: { body: tpl.body, image_url: tpl.image_url || '', lead: { name: sample.name, phone_number: sample.phone || '' } },
+      body: {
+        body: tpl.body || '',
+        blocks: (tpl.channel === 'email' && Array.isArray(tpl.blocks)) ? tpl.blocks : undefined,
+        subject: tpl.channel === 'email' ? (tpl.subject || '') : '',
+        image_url: tpl.image_url || '',
+        lead: { name: sample.name, phone_number: sample.phone || '', email: sample.email || '' },
+      },
     });
-    el.textContent = res.message || tpl.body;
+    if (res.html) {
+      el.innerHTML = (res.subject ? `<p class="text-xs text-slate-400 mb-2">Subject: ${esc(res.subject)}</p>` : '')
+        + `<div class="bg-white text-black rounded-lg p-3">${res.html}</div>`;
+    } else {
+      el.textContent = (res.subject ? `Subject: ${res.subject}\n\n` : '') + (res.message || tpl.body || '');
+    }
   } catch {
-    el.textContent = tpl.body;
+    el.textContent = tpl.body || '';
   }
 }
 
@@ -1090,15 +1351,16 @@ async function createCampaign(e) {
   const form = document.getElementById('campaign-form');
   if (!validateForm(form)) return;
 
-  const leadIds = [...selectedLeads.keys()];
-  if (!leadIds.length) {
-    notify('Select at least one recipient', 'error');
+  const leadIds = [...campaignRecipients.keys()];
+  if (!leadIds.length && !manualRecipients.length) {
+    notify('Add at least one recipient', 'error');
     return;
   }
 
   const body = {
     template_id: document.getElementById('campaign-template').value,
     lead_ids: leadIds,
+    manual_recipients: manualRecipients,
     channel: document.getElementById('campaign-channel').value,
     mark_contacted: document.getElementById('campaign-mark').checked,
   };
@@ -1110,30 +1372,49 @@ async function createCampaign(e) {
     const resultEl = document.getElementById('campaign-result');
     resultEl.classList.remove('hidden');
     const messages = safeArr(camp.messages);
+    const isEmail = camp.channel === 'email';
     const links = messages.filter(m => m.url).map(m => m.url);
+
+    let headline;
+    if (isEmail) {
+      const failed = messages.filter(m => !m.sent).length;
+      headline = `<p class="text-emerald-400 font-medium"><i class="fa-solid fa-paper-plane mr-1"></i>${camp.sent || 0} email(s) sent${failed ? `, ${failed} failed` : ''}${camp.skipped ? `, ${camp.skipped} skipped` : ''}</p>`;
+      if (!camp.gmail_active) {
+        headline += `<p class="text-amber-400 text-xs mt-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Gmail not configured — add your Gmail App Password in <a href="#" class="underline" onclick="navigateTab('settings');return false;">Settings → Integrations</a>.</p>`;
+      }
+    } else {
+      headline = `<p class="text-emerald-400 font-medium"><i class="fa-solid fa-circle-check mr-1"></i>${camp.ready || messages.length} message(s) ready${camp.skipped ? `, ${camp.skipped} skipped` : ''}</p>`;
+    }
+
     resultEl.innerHTML = `
       <div class="flex items-center justify-between mb-2">
-        <p class="text-emerald-400 font-medium"><i class="fa-solid fa-circle-check mr-1"></i>${camp.ready || messages.length} message(s) ready${camp.skipped ? `, ${camp.skipped} skipped` : ''}</p>
+        ${headline}
         ${links.length ? `<button type="button" id="campaign-open-all" class="btn-secondary text-xs">Open all WhatsApp</button>` : ''}
       </div>
       <div class="space-y-2 max-h-56 overflow-y-auto">${messages.map(m => `
         <div class="text-xs glass rounded-lg p-2.5">
           <div class="flex items-center justify-between gap-2">
-            <span><strong class="text-white">${esc(m.name)}</strong> <span class="text-slate-500">${esc(m.phone || '—')}</span></span>
-            ${m.url ? `<a href="${esc(m.url)}" target="_blank" class="text-indigo-400 whitespace-nowrap"><i class="fa-brands fa-whatsapp mr-1"></i>Open</a>` : '<span class="text-slate-600">no phone</span>'}
+            <span><strong class="text-white">${esc(m.name)}</strong> <span class="text-slate-500">${esc(isEmail ? (m.email || '—') : (m.phone || '—'))}</span></span>
+            ${isEmail
+              ? (m.sent
+                  ? '<span class="text-emerald-400 whitespace-nowrap"><i class="fa-solid fa-circle-check mr-1"></i>Sent</span>'
+                  : `<span class="text-rose-400 whitespace-nowrap" title="${esc(m.error || 'Failed')}"><i class="fa-solid fa-circle-xmark mr-1"></i>Failed</span>`)
+              : (m.url ? `<a href="${esc(m.url)}" target="_blank" class="text-indigo-400 whitespace-nowrap"><i class="fa-brands fa-whatsapp mr-1"></i>Open</a>` : '<span class="text-slate-600">no phone</span>')}
           </div>
+          ${isEmail && m.subject ? `<p class="text-slate-300 mt-1"><span class="text-slate-500">Subject:</span> ${esc(m.subject)}</p>` : ''}
+          ${isEmail && m.error ? `<p class="text-rose-400/80 mt-1">${esc(m.error)}</p>` : ''}
           <p class="text-slate-400 mt-1 line-clamp-2">${esc(m.message || '')}</p>
         </div>`).join('')}</div>`;
     const openAll = document.getElementById('campaign-open-all');
     if (openAll) openAll.addEventListener('click', () => {
       links.slice(0, 20).forEach((u, i) => setTimeout(() => window.open(u, '_blank'), i * 300));
     });
-    notify(`Campaign created — ${messages.length} message(s) ready`, 'success');
+    notify(isEmail ? `Campaign sent — ${camp.sent || 0} email(s) delivered` : `Campaign created — ${messages.length} message(s) ready`, 'success');
     document.getElementById('campaign-lead-search').value = '';
     document.getElementById('campaign-lead-results').classList.add('hidden');
-    selectedLeads.clear();
+    campaignRecipients.clear();
+    manualRecipients = [];
     renderCampaignRecipients();
-    updateSelectionUI();
     loadCampaigns();
   } catch (err) {
     notify(err.message, 'error');
@@ -1983,6 +2264,12 @@ async function loadSettings() {
       const input = form.elements[key];
       if (input) input.value = val ?? '';
     }
+    const gmailBadge = document.getElementById('gmail-status');
+    if (gmailBadge) {
+      const active = !!(s.gmail_address && s.gmail_app_password);
+      gmailBadge.textContent = active ? 'Active' : 'Optional';
+      gmailBadge.className = active ? 'badge badge-success' : 'badge badge-warn';
+    }
   } catch (err) {
     notify('Could not load settings: ' + err.message, 'error');
   }
@@ -2145,10 +2432,14 @@ async function openLeadDetail(id) {
     document.getElementById('ld-sub').textContent = [l.phone_number, leadLocation(l)].filter(Boolean).join(' · ');
     document.getElementById('ld-status').value = l.status || 'New';
     document.getElementById('ld-followup').value = (l.follow_up_date || '').slice(0, 10);
+    document.getElementById('ld-email').value = l.email || '';
     const wa = document.getElementById('ld-whatsapp');
     const digits = (l.phone_number || '').replace(/[^\d]/g, '');
     if (digits) { wa.href = `https://wa.me/${digits}`; wa.classList.remove('hidden'); }
     else wa.classList.add('hidden');
+    const mail = document.getElementById('ld-email-link');
+    if (l.email) { mail.href = `mailto:${l.email}`; mail.classList.remove('hidden'); }
+    else mail.classList.add('hidden');
     renderTimeline(safeArr(l.activity_history));
     document.getElementById('ld-note-text').value = '';
     document.getElementById('lead-detail-modal').classList.remove('hidden');
@@ -2176,6 +2467,7 @@ async function saveLeadDetail() {
   const body = {
     status: document.getElementById('ld-status').value,
     follow_up_date: document.getElementById('ld-followup').value || null,
+    email: document.getElementById('ld-email').value.trim(),
   };
   try {
     await api(`/api/leads/${currentDetailLead.id}`, { method: 'PUT', body });
@@ -2434,14 +2726,28 @@ function bindEvents() {
   document.getElementById('area-api-check-btn').addEventListener('click', checkAreaAPIStatus);
 
   document.getElementById('template-form').addEventListener('submit', saveTemplate);
+  document.getElementById('tpl-channel').addEventListener('change', toggleTemplateMode);
+  document.getElementById('tpl-image-btn').addEventListener('click', () => document.getElementById('tpl-image-file').click());
+  document.getElementById('tpl-image-file').addEventListener('change', (e) => uploadTplImage(e.target.files[0]));
+  document.getElementById('tpl-image-clear').addEventListener('click', () => setTplImage(''));
+  document.querySelectorAll('.add-block').forEach(b => b.addEventListener('click', () => addBlock(b.dataset.block)));
+  document.getElementById('manual-rcpt-add').addEventListener('click', addManualRecipient);
   document.getElementById('tpl-reset').addEventListener('click', () => {
     document.getElementById('template-edit-id').value = '';
     document.getElementById('template-form').reset();
+    setTplImage('');
+    tplBlocks = [];
+    toggleTemplateMode();
   });
   document.getElementById('campaign-form').addEventListener('submit', createCampaign);
   document.getElementById('campaign-lead-search').addEventListener('input', searchCampaignLeads);
-  document.getElementById('campaign-clear-recipients').addEventListener('click', () => { selectedLeads.clear(); renderCampaignRecipients(); updateSelectionUI(); });
-  document.getElementById('campaign-template').addEventListener('change', updateCampaignPreview);
+  document.getElementById('campaign-clear-recipients').addEventListener('click', () => {
+    campaignRecipients.clear();
+    manualRecipients = [];
+    document.querySelectorAll('.campaign-pick').forEach(cb => { cb.checked = false; });
+    renderCampaignRecipients();
+  });
+  document.getElementById('campaign-template').addEventListener('change', onCampaignTemplateChange);
 
   document.getElementById('meeting-form').addEventListener('submit', createMeeting);
   document.getElementById('task-form').addEventListener('submit', createTask);
